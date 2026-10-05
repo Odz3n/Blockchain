@@ -192,7 +192,7 @@ public class BlockchainService
 
         block.Nonce = default;
 
-        return _miningService.MineBlock(block, Difficulty);
+        return _miningService.MineBlock(block, block.Difficulty);
     }
     public ChainRepairMetrics RepairChain(int startIndex = 0)
     {
