@@ -26,18 +26,13 @@ public class MiningService
             attempts++;
 
             if (block.Hash.StartsWith(target))
+            {
+                block.MiningDuration = stopwatch.Elapsed.TotalSeconds;
+                block.Difficulty = difficulty;
                 break;
+            }
 
             block.Nonce++;
-
-            //if (block.Nonce % 100_000 == 0)
-            //{
-            //    Console.WriteLine(
-            //        $"Mining in progress..." +
-            //        $"\n\tCurrent Nonce: {block.Nonce}" +
-            //        $"\n\tCurrent Hash: {block.Hash}" +
-            //        $"\n\tElapsed Time: {stopwatch.Elapsed}");
-            //}
         }
 
         stopwatch.Stop();

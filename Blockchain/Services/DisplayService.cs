@@ -33,8 +33,21 @@ public class DisplayService
         Row("Nonce", $"{block.Nonce:N0}");
         Row("Hash", block.Hash);
         Row("PrevHash", block.PrevHash);
+        Row("Difficulty", block.Difficulty.ToString());
+        Row("MiningDuration", block.MiningDuration.ToString());
 
         Line();
+    }
+
+    public void DisplayDifficultyChangeMetrics(DifficultyChangeMetrics metrics)
+    {
+        Header("DIFFICULTY CHANGE METRICS");
+
+        Row("Avg time", $"{metrics.AvgMiningTime:N0}");
+        Row("Target block time", $"{metrics.TargetBlockTime:N0}");
+        Row("Old difficulty", $"{metrics.OldDifficulty:N0}");
+        Row("New difficulty", $"{metrics.NewDifficulty:N0}");
+        Row("Reason", $"{metrics.Reason:N0}");
     }
 
     public void DisplayMiningMetrics(MiningMetrics metrics)

@@ -12,6 +12,7 @@ public class MenuService
     private bool _statusSuccess = true;
     private MiningMetrics? _lastMiningMetrics;
     private ChainRepairMetrics? _lastRepairMetrics;
+    private DifficultyChangeMetrics? _changeMetrics;
 
     public bool ShowMetrics { get; private set; }
 
@@ -56,8 +57,10 @@ public class MenuService
         {
             if (_lastRepairMetrics != null)
                 _displayService.DisplayRepairMetrics(_lastRepairMetrics);
-            else if (_lastMiningMetrics != null)
+            if (_lastMiningMetrics != null)
                 _displayService.DisplayMiningMetrics(_lastMiningMetrics);
+            if (_changeMetrics != null)
+                _displayService.DisplayDifficultyChangeMetrics(_changeMetrics);
         }
 
         PrintSeparator();
@@ -71,6 +74,7 @@ public class MenuService
         PrintOption(7, "Re-mine Block");
         PrintOption(8, "Repair Chain");
         PrintOption(9, "Toggle Metrics");
+        PrintOption(10, "Show Chain metrics");
         PrintOption(0, "Exit");
 
         Console.Write("\n  >>> ");
@@ -106,11 +110,39 @@ public class MenuService
             case 9:
                 ToggleMetrics();
                 break;
+            case 10:
+                ShowChainMetrics();
+                break;
             default:
                 ShowMessage("Unknown menu option.", false);
                 break;
         }
     }
+
+    private void ShowChainMetrics()
+    {
+        Console.Clear();
+        PrintHeader("CHAIN METRICS");
+
+        var res = _blockchainService.GetChainMetrics();
+
+        PrintInfo("Fastest block", res.FastestBlock.Index.ToString());
+        _displayService.DisplayBlock(res.FastestBlock);
+
+        PrintInfo("Slowest block", res.SlowestBlock.Index.ToString());
+        _displayService.DisplayBlock(res.SlowestBlock);
+
+        PrintInfo("Most attempts block", res.MostAttemptsBlock.Index.ToString());
+        _displayService.DisplayBlock(res.MostAttemptsBlock);
+
+        PrintInfo("Average mining time", res.AvgMiningTime.ToString());
+        PrintInfo("Average attempts count", res.AvgAttemptsCount.ToString());
+        PrintInfo("Global min difficulty", res.MinDiffAtMining.ToString());
+        PrintInfo("Global max difficulty", res.MaxDiffAtMining.ToString());
+
+        WaitForKey();
+    }
+
     private void ChangeDifficulty()
     {
         Console.Clear();
@@ -174,7 +206,9 @@ public class MenuService
         {
             PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            _blockchainService.AddBlock(data, "N/A");
+            var metrics = _blockchainService.AddBlock(data, "N/A");
+            if (metrics != null)
+                _changeMetrics = metrics;
 
             var block = _blockchainService.Chain[^1];
 

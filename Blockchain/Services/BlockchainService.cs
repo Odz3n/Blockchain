@@ -13,19 +13,30 @@ public class BlockchainService
     public List<Block> Chain { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
-    public string HashMask { get; private set; }
+    public string HashMask { get; private set; } = string.Empty;
 
-    public BlockchainService(int difficulty = 5)
+    private readonly double _targetBlockTime = 2;
+    private readonly int _adjustmentInterval = 2;
+    private readonly int _minDifficulty = 1;
+    private readonly int _maxDifficulty = 6;
+
+    public BlockchainService(
+        int difficulty = 1,
+        double targetBlockTime = 2,
+        int adjustmentInterval = 2)
     {
         _hashService = new();
         _miningService = new();
+
+        _adjustmentInterval = adjustmentInterval;
+        _targetBlockTime = targetBlockTime;
 
         Difficulty = difficulty;
         HashMask = new string('0', Difficulty);
 
         AddGenesisBlock();
     }
-    public void AddBlock(string data, string author)
+    public DifficultyChangeMetrics? AddBlock(string data, string author)
     {
         Block lastBlock = Chain[Chain.Count - 1];
 
@@ -34,12 +45,65 @@ public class BlockchainService
             Index = lastBlock.Index + 1,
             Data = data,
             Author = author,
-            PrevHash = lastBlock.Hash
+            PrevHash = lastBlock.Hash,
+            Difficulty = Difficulty
         };
 
         _miningService.MineBlock(newBlock, Difficulty, HashMask);
 
         Chain.Add(newBlock);
+
+        if (newBlock.Index % _adjustmentInterval == 0)
+            return AdjustDifficulty();
+        return null;
+    }
+    private DifficultyChangeMetrics AdjustDifficulty()
+    {
+        var recentBlocks = Chain
+            .Where(b => b.Index > 0)
+            .TakeLast(_adjustmentInterval)
+            .ToList();
+
+        if (recentBlocks.Count == 0)
+            throw new InvalidOperationException(nameof(recentBlocks.Count));
+
+        var avgTime = recentBlocks.Average(b => b.MiningDuration);
+
+        var metrics = new DifficultyChangeMetrics
+        {
+            TargetBlockTime = _targetBlockTime,
+            AvgMiningTime = avgTime,
+            OldDifficulty = Difficulty
+        };
+
+        if (avgTime < _targetBlockTime * 0.25)
+        {
+            ChangeDifficulty(Math.Min(_maxDifficulty, Difficulty + 2));
+            metrics.Reason = "Average mining time below 25% of target.";
+        }
+        else if (avgTime < _targetBlockTime * 0.5)
+        {
+            ChangeDifficulty(Math.Min(_maxDifficulty, Difficulty + 1));
+            metrics.Reason = "Average mining time below 50% of target.";
+        }
+        else if (avgTime > _targetBlockTime * 4)
+        {
+            ChangeDifficulty(Math.Max(_minDifficulty, Difficulty - 2));
+            metrics.Reason = "Average mining time above 400% of target.";
+        }
+        else if (avgTime > _targetBlockTime * 2)
+        {
+            ChangeDifficulty(Math.Max(_minDifficulty, Difficulty - 1));
+            metrics.Reason = "Average mining time above 200% of target.";
+        }
+        else
+        {
+            metrics.Reason = "Nothing changed.";
+        }
+
+        metrics.NewDifficulty = Difficulty;
+
+        return metrics;
     }
     public ValidationResult IsValid()
     {
@@ -64,7 +128,8 @@ public class BlockchainService
                     Message = $"Invalid block: {Chain[i].Index}. Invalid prevHash."
                 };
 
-            if (!currentBlock.Hash.StartsWith(HashMask))
+            var target = new string('0', currentBlock.Difficulty);
+            if (!currentBlock.Hash.StartsWith(string.IsNullOrEmpty(HashMask) ? target : HashMask))
                 return new ValidationResult 
                 {
                     IsValid = false,
@@ -75,6 +140,25 @@ public class BlockchainService
         {
             IsValid = true,
             Message = "Blockchain is valid."
+        };
+    }
+    public ChainMetrics GetChainMetrics()
+    {
+        double minMiningDuration = Chain.Min(b => b.MiningDuration);
+        double maxMiningDuration = Chain.Max(b => b.MiningDuration);
+        int maxDiff = Chain.Max(b => b.Difficulty);
+        int minDiff = Chain.Min(b => b.Difficulty);
+        long attemptsCount = Chain.Max(b => b.Nonce);
+
+        return new ChainMetrics
+        {
+            FastestBlock = Chain.FirstOrDefault(b => b.MiningDuration <= minMiningDuration),
+            SlowestBlock = Chain.FirstOrDefault(b => b.MiningDuration >= maxMiningDuration),
+            MostAttemptsBlock = Chain.FirstOrDefault(b => b.Nonce >= attemptsCount),
+            AvgMiningTime = Chain.Average(b => b.MiningDuration),
+            AvgAttemptsCount = Chain.Average(b => b.Nonce),
+            MaxDiffAtMining = maxDiff,
+            MinDiffAtMining = minDiff
         };
     }
     public void ChangeDifficulty(int difficulty)
