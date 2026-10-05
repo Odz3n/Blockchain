@@ -13,7 +13,6 @@ public class BlockchainService
     public List<Block> Chain { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
-    public string HashMask { get; private set; } = string.Empty;
 
     private readonly double _targetBlockTime = 2;
     private readonly int _adjustmentInterval = 2;
@@ -32,7 +31,6 @@ public class BlockchainService
         _targetBlockTime = targetBlockTime;
 
         Difficulty = difficulty;
-        HashMask = new string('0', Difficulty);
 
         AddGenesisBlock();
     }
@@ -49,7 +47,7 @@ public class BlockchainService
             Difficulty = Difficulty
         };
 
-        _miningService.MineBlock(newBlock, Difficulty, HashMask);
+        _miningService.MineBlock(newBlock, Difficulty);
 
         Chain.Add(newBlock);
 
@@ -129,7 +127,7 @@ public class BlockchainService
                 };
 
             var target = new string('0', currentBlock.Difficulty);
-            if (!currentBlock.Hash.StartsWith(string.IsNullOrEmpty(HashMask) ? target : HashMask))
+            if (!currentBlock.Hash.StartsWith(target))
                 return new ValidationResult 
                 {
                     IsValid = false,
@@ -167,35 +165,17 @@ public class BlockchainService
             throw new ArgumentOutOfRangeException(nameof(difficulty));
 
         Difficulty = difficulty;
-        HashMask = new string('0', difficulty);
-    }
-    public void ChangeHashMask(string mask)
-    {
-        if (string.IsNullOrEmpty(mask))
-            throw new ArgumentException("Mask cannot be empty.");
-
-        if (mask.Length > 64)
-            throw new ArgumentException("Mask is too long.");
-
-        if (mask.Any(c => !Uri.IsHexDigit(c)))
-            throw new ArgumentException("Mask must contain hexadecimal characters.");
-
-        HashMask = mask.ToLowerInvariant();
-        Difficulty = HashMask.Length;
     }
     public void ChangeData(Block? block, string? data)
     {
-        // validate
         ArgumentNullException.ThrowIfNull(block);
         ArgumentException.ThrowIfNullOrWhiteSpace(data);
 
         if (!Chain.Contains(block))
             throw new ArgumentException("Block does not belong to this blockchain.", nameof(block));
 
-        // change data explicitly
         block.Data = data;
 
-        // re-mine it to get correct hash
         RemineBlock(block);
     }
     public MiningMetrics RemineBlock(Block? block)
@@ -212,7 +192,7 @@ public class BlockchainService
 
         block.Nonce = default;
 
-        return _miningService.MineBlock(block, Difficulty, HashMask);
+        return _miningService.MineBlock(block, Difficulty);
     }
     public ChainRepairMetrics RepairChain(int startIndex = 0)
     {
@@ -248,7 +228,7 @@ public class BlockchainService
             PrevHash = "0"
         };
 
-        _miningService.MineBlock(genesis, Difficulty, HashMask);
+        _miningService.MineBlock(genesis, Difficulty);
 
         Chain.Add(genesis);
     }

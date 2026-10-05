@@ -49,7 +49,6 @@ public class MenuService
         Console.WriteLine();
 
         PrintInfo("Difficulty", _blockchainService.Difficulty.ToString());
-        PrintInfo("Mask", _blockchainService.HashMask);
         PrintInfo("Blocks", _blockchainService.Chain.Count.ToString());
         PrintInfo("Metrics", ShowMetrics ? "ON" : "OFF");
 
@@ -68,13 +67,12 @@ public class MenuService
         PrintOption(1, "Change Difficulty");
         PrintOption(2, "Add Block");
         PrintOption(3, "Show Chain");
-        PrintOption(4, "Change Hash Mask");
-        PrintOption(5, "Change Data");
-        PrintOption(6, "Validate");
-        PrintOption(7, "Re-mine Block");
-        PrintOption(8, "Repair Chain");
-        PrintOption(9, "Toggle Metrics");
-        PrintOption(10, "Show Chain metrics");
+        PrintOption(4, "Change Data");
+        PrintOption(5, "Validate");
+        PrintOption(6, "Re-mine Block");
+        PrintOption(7, "Repair Chain");
+        PrintOption(8, "Toggle Metrics");
+        PrintOption(9, "Show Chain metrics");
         PrintOption(0, "Exit");
 
         Console.Write("\n  >>> ");
@@ -93,24 +91,21 @@ public class MenuService
                 ShowChain();
                 break;
             case 4:
-                ChangeHashMask();
-                break;
-            case 5:
                 ChangeData();
                 break;
-            case 6:
+            case 5:
                 Validate();
                 break;
-            case 7:
+            case 6:
                 Remine();
                 break;
-            case 8:
+            case 7:
                 Fix();
                 break;
-            case 9:
+            case 8:
                 ToggleMetrics();
                 break;
-            case 10:
+            case 9:
                 ShowChainMetrics();
                 break;
             default:
@@ -161,26 +156,6 @@ public class MenuService
         {
             _blockchainService.ChangeDifficulty(difficulty);
             ShowMessage($"Difficulty changed to {difficulty}.");
-        }
-        catch (ArgumentException ex)
-        {
-            ShowMessage(ex.Message, false);
-        }
-    }
-    private void ChangeHashMask()
-    {
-        Console.Clear();
-        PrintHeader("CHANGE HASH MASK");
-        PrintInfo("Current", _blockchainService.HashMask);
-
-        WriteColored("\n  New mask: ", ConsoleColor.Cyan);
-
-        string? mask = Console.ReadLine();
-
-        try
-        {
-            _blockchainService.ChangeHashMask(mask ?? "");
-            ShowMessage($"Hash mask changed to {_blockchainService.HashMask}.");
         }
         catch (ArgumentException ex)
         {

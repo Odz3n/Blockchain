@@ -13,9 +13,9 @@ public class MiningService
         _hashService = new();
     }
 
-    public MiningMetrics MineBlock(Block block, int difficulty, string? mask)
+    public MiningMetrics MineBlock(Block block, int difficulty)
     {
-        string target = mask ?? new string('0', difficulty);
+        string target = new string('0', difficulty);
 
         long attempts = 0;
         var stopwatch = Stopwatch.StartNew();
