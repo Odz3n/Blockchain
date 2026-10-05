@@ -34,6 +34,12 @@ public class ExplorerService
             .OrderByDescending(t => t.Amount)
             .FirstOrDefault();
     }
+    public List<Transaction>? GetByType(Models.Type? type)
+    {
+        return GetTransactions()
+            .Where(t => t.Type == type)
+            .ToList();
+    }
     private IEnumerable<Transaction> GetTransactions()
     {
         return _blockchainService.Chain

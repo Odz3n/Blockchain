@@ -136,6 +136,7 @@ public class MenuService
             PrintOption(2, "Find transactions by user (sender)");
             PrintOption(3, "Find amount-specific transactions");
             PrintOption(4, "Find the biggest transaction");
+            PrintOption(5, "Find by type");
             PrintOption(0, "Back");
 
             WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -158,6 +159,10 @@ public class MenuService
                     GetTheBiggest();
                     break;
 
+                case "5":
+                    FindTransactionByType();
+                    break;
+
                 case "0":
                     return;
 
@@ -166,6 +171,25 @@ public class MenuService
                     break;
             }
         }
+    }
+    private void FindTransactionByType()
+    {
+        Console.Clear();
+        PrintHeader("TRANSACTIONS BY TYPE");
+
+        WriteColored("\n  Type (0 - Transfer, 1 - Purchase, 2 - Gift): ", ConsoleColor.Cyan);
+        Models.Type? type = GetTransactionType(Console.ReadLine());
+
+        var transactions = _explorerService.GetByType(type);
+
+        if (transactions == null || transactions.Count <= 0)
+        {
+            ShowMessage($"No {type.ToString()} transactions found.", false);
+            return;
+        }
+
+        _displayService.DisplayTransactions(transactions);
+        WaitForKey();
     }
     private void GetTheBiggest()
     {
@@ -379,7 +403,10 @@ public class MenuService
         Console.Clear();
         PrintHeader("ADD TRANSACTION");
 
-        WriteColored("\n  From: ", ConsoleColor.Cyan);
+        WriteColored("\n  Type (0 - Transfer, 1 - Purchase, 2 - Gift): ", ConsoleColor.Cyan);
+        Models.Type? type = GetTransactionType(Console.ReadLine());
+
+        WriteColored("  From: ", ConsoleColor.Cyan);
         string? from = Console.ReadLine();
 
         WriteColored("  To: ", ConsoleColor.Cyan);
@@ -390,7 +417,7 @@ public class MenuService
 
         try
         {
-            var transaction = _transactionService.CreateTransaction(from, to, amount);
+            var transaction = _transactionService.CreateTransaction(type, from, to, amount);
             var validationResult = _transactionService.ValidateTransaction(transaction);
 
             if (!validationResult.IsValid)
@@ -408,6 +435,24 @@ public class MenuService
             ShowMessage(ex.Message, false);
         }
     }
+
+    private Models.Type? GetTransactionType(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            ShowMessage("Invalid value.", false);
+            return null;
+        }
+
+        return value switch
+        {
+            "0" => Models.Type.Transfer,
+            "1" => Models.Type.Purchase,
+            "2" => Models.Type.Gift,
+            _ => null
+        };
+    }
+
     private void ShowChain()
     {
         Console.Clear();

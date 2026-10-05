@@ -56,6 +56,7 @@ public class DisplayService
 
         Header("TRANSACTION");
 
+        Row("Type", transaction.Type.ToString()!);
         Row("From", transaction.From);
         Row("To", transaction.To);
         Row("Amount", transaction.Amount.ToString("F2"));

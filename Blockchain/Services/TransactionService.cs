@@ -6,16 +6,18 @@ namespace Blockchain.Services;
 public class TransactionService
 {
     public Transaction CreateTransaction(
+        Models.Type? type,
         string? from,
         string? to,
         decimal amount)
     {
-        var tx = new Transaction(from, to, amount);
-        var res = ValidateTransaction(tx);
-        if (!res.IsValid)
-            throw new InvalidOperationException($"Invalid transaction: {res.Message}");
+        var transaction = new Transaction(type, from, to, amount);
 
-        return new Transaction(from, to, amount);
+        var validationResult = ValidateTransaction(transaction);
+        if (!validationResult.IsValid)
+            throw new InvalidOperationException($"Invalid transaction: {validationResult.Message}");
+
+        return transaction;
     }
     public ValidationResult ValidateTransaction(Transaction transaction)
     {
@@ -24,6 +26,13 @@ public class TransactionService
             { 
                 IsValid = false,
                 Message = "Transaction is null." 
+            };
+
+        if (transaction.Type == null)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Type is null."
             };
 
         if (string.IsNullOrWhiteSpace(transaction.From))
