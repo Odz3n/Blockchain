@@ -8,7 +8,10 @@ public class HashService
 {
     public string ComputeHash(Block block)
     {
-        string rawData = $"{block.Index}{block.Data}{block.Author}{block.Timestamp.ToString("o")}{block.PrevHash}{block.Nonce}{block.Difficulty}";
+        var transactionsRaw = string.Join("", block.Transactions.ConvertAll(t => $"{t.ToRawString()}"));
+        var transactionsHash = ComputeSHA256(transactionsRaw);
+
+        string rawData = $"{block.Index}{transactionsHash}{block.Author}{block.Timestamp.ToString("o")}{block.PrevHash}{block.Nonce}{block.Difficulty}";
 
         return ComputeSHA256(rawData);
     }

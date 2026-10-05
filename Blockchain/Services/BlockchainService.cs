@@ -2,6 +2,7 @@
 using Blockchain.Models.Metrics;
 using Blockchain.Models.Validation;
 using System.Diagnostics;
+using System.Transactions;
 
 namespace Blockchain.Services;
 
@@ -19,6 +20,8 @@ public class BlockchainService
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
+    public List<Blockchain.Models.Transaction> TransactionPool { get; set; } = new();
+
     public BlockchainService(
         int difficulty = 1,
         double targetBlockTime = 2,
@@ -34,14 +37,14 @@ public class BlockchainService
 
         AddGenesisBlock();
     }
-    public DifficultyChangeMetrics? AddBlock(string data, string author)
+    public DifficultyChangeMetrics? AddBlock(List<Blockchain.Models.Transaction> transactions, string author)
     {
         Block lastBlock = Chain[Chain.Count - 1];
 
         var newBlock = new Block
         {
             Index = lastBlock.Index + 1,
-            Data = data,
+            Transactions = transactions.ToList(),
             Author = author,
             PrevHash = lastBlock.Hash,
             Difficulty = Difficulty
@@ -51,9 +54,17 @@ public class BlockchainService
 
         Chain.Add(newBlock);
 
+        TransactionPool.Clear();
+
         if (newBlock.Index % _adjustmentInterval == 0)
             return AdjustDifficulty();
         return null;
+    }
+    public void AddTransaction(Blockchain.Models.Transaction transaction)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        TransactionPool.Add(transaction);
     }
     private DifficultyChangeMetrics AdjustDifficulty()
     {
@@ -166,18 +177,18 @@ public class BlockchainService
 
         Difficulty = difficulty;
     }
-    public void ChangeData(Block? block, string? data)
-    {
-        ArgumentNullException.ThrowIfNull(block);
-        ArgumentException.ThrowIfNullOrWhiteSpace(data);
+    //public void ChangeData(Block? block, string? data)
+    //{
+    //    ArgumentNullException.ThrowIfNull(block);
+    //    ArgumentException.ThrowIfNullOrWhiteSpace(data);
 
-        if (!Chain.Contains(block))
-            throw new ArgumentException("Block does not belong to this blockchain.", nameof(block));
+    //    if (!Chain.Contains(block))
+    //        throw new ArgumentException("Block does not belong to this blockchain.", nameof(block));
 
-        block.Data = data;
+    //    block.Data = data;
 
-        RemineBlock(block);
-    }
+    //    RemineBlock(block);
+    //}
     public MiningMetrics RemineBlock(Block? block)
     {
         ArgumentNullException.ThrowIfNull(block);
@@ -222,7 +233,7 @@ public class BlockchainService
         var genesis = new Block
         {
             Index = 0,
-            Data = "0",
+            Transactions = new List<Blockchain.Models.Transaction>(),
             Timestamp = DateTime.Parse("1900-01-01"),
             Author = "0",
             PrevHash = "0"

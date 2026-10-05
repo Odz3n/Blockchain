@@ -27,7 +27,6 @@ public class DisplayService
             $"\n  #{block.Index} {(block.Index == 0 ? "[GENESIS]" : "")}\n",
             ConsoleColor.Cyan);
 
-        Row("Data", block.Data);
         Row("Author", block.Author);
         Row("Time", block.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"));
         Row("Nonce", $"{block.Nonce:N0}");
@@ -35,8 +34,37 @@ public class DisplayService
         Row("PrevHash", block.PrevHash);
         Row("Difficulty", block.Difficulty.ToString());
         Row("MiningDuration", block.MiningDuration.ToString());
+        Row("Transactions", block.Transactions.Count.ToString());
+        if (block.Transactions != null && block.Transactions.Count > 0)
+        {
+            for (int i = 0; i < block.Transactions.Count; i++)
+            {
+                Row($"Transaction #{i}", block.Transactions[i].ToString());
+            }
+        }
 
         Line();
+    }
+
+    public void DisplayTransaction(Transaction? transaction)
+    {
+        if (transaction == null)
+        {
+            Colored("  Transaction is null.\n", ConsoleColor.Yellow);
+            return;
+        }
+
+        Header("TRANSACTION");
+
+        Row("From", transaction.From);
+        Row("To", transaction.To);
+        Row("Amount", transaction.Amount.ToString("F2"));
+    }
+
+    public void DisplayTransactions(IEnumerable<Transaction> transactions)
+    {
+        foreach (var transaction in transactions)
+            DisplayTransaction(transaction);
     }
 
     public void DisplayDifficultyChangeMetrics(DifficultyChangeMetrics metrics)

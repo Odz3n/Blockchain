@@ -7,6 +7,8 @@ public class MenuService
 {
     private readonly BlockchainService _blockchainService;
     private readonly DisplayService _displayService;
+    private readonly ExplorerService _explorerService;
+    private readonly TransactionService _transactionService;
 
     private string? _statusMessage;
     private bool _statusSuccess = true;
@@ -21,6 +23,8 @@ public class MenuService
         ShowMetrics = showMetrics;
         _blockchainService = new BlockchainService(initialDifficulty);
         _displayService = new DisplayService();
+        _explorerService = new(_blockchainService);
+        _transactionService = new();
     }
     public void Run()
     {
@@ -73,6 +77,7 @@ public class MenuService
         PrintOption(7, "Repair Chain");
         PrintOption(8, "Toggle Metrics");
         PrintOption(9, "Show Chain metrics");
+        PrintOption(10, "Crypto Explorer");
         PrintOption(0, "Exit");
 
         Console.Write("\n  >>> ");
@@ -90,9 +95,9 @@ public class MenuService
             case 3:
                 ShowChain();
                 break;
-            case 4:
-                ChangeData();
-                break;
+            //case 4:
+            //    ChangeData();
+            //    break;
             case 5:
                 Validate();
                 break;
@@ -108,12 +113,154 @@ public class MenuService
             case 9:
                 ShowChainMetrics();
                 break;
+            case 10:
+                CryptoExplorer();
+                break;
             default:
                 ShowMessage("Unknown menu option.", false);
                 break;
         }
     }
+    private void CryptoExplorer()
+    {
+        while (true)
+        {
+            Console.Clear();
+            PrintHeader("CRYPTO EXPLORER");
 
+            ShowStatusBar();
+
+            Console.WriteLine();
+
+            PrintOption(1, "Find by Id");
+            PrintOption(2, "Find transactions by user (sender)");
+            PrintOption(3, "Find amount-specific transactions");
+            PrintOption(4, "Find the biggest transaction");
+            PrintOption(0, "Back");
+
+            WriteColored("\n  >>> ", ConsoleColor.Cyan);
+
+            switch (Console.ReadLine())
+            {
+                case "1":
+                    FindTransactionById();
+                    break;
+
+                case "2":
+                    GetTransactionsByUser();
+                    break;
+
+                case "3":
+                    GetTransactionsByAmount();
+                    break;
+
+                case "4":
+                    GetTheBiggest();
+                    break;
+
+                case "0":
+                    return;
+
+                default:
+                    ShowMessage("Invalid option.", false);
+                    break;
+            }
+        }
+    }
+    private void GetTheBiggest()
+    {
+        Console.Clear();
+        PrintHeader("BIGGEST TRANSACTION");
+
+        var transaction = _explorerService.GetTheBiggestTransaction();
+
+        if (transaction == null)
+        {
+            ShowMessage("No transactions found.", false);
+            return;
+        }
+
+        _displayService.DisplayTransaction(transaction);
+        WaitForKey();
+    }
+    private void GetTransactionsByAmount()
+    {
+        Console.Clear();
+        PrintHeader("TRANSACTIONS BY AMOUNT");
+
+        WriteColored("\n  Amount: ", ConsoleColor.Cyan);
+
+        if (!decimal.TryParse(Console.ReadLine(), out decimal amount) || amount < 0)
+        {
+            ShowMessage("Invalid amount.", false);
+            return;
+        }
+
+        var transactions = _explorerService.GetTransactionsWithAmountGreaterThan(amount);
+
+        if (transactions.Count == 0)
+        {
+            ShowMessage($"No transactions greater than {amount:F2}.", false);
+            return;
+        }
+
+        foreach (var transaction in transactions)
+            _displayService.DisplayTransaction(transaction);
+
+        WaitForKey();
+    }
+    private void GetTransactionsByUser()
+    {
+        Console.Clear();
+        PrintHeader("TRANSACTIONS BY SENDER");
+
+        WriteColored("\n  Sender: ", ConsoleColor.Cyan);
+        string? sender = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(sender))
+        {
+            ShowMessage("Sender cannot be empty.", false);
+            return;
+        }
+
+        var transactions = _explorerService.GetTransactionsBySender(sender);
+
+        if (transactions.Count == 0)
+        {
+            ShowMessage($"No transactions found for '{sender}'.", false);
+            return;
+        }
+
+        foreach (var transaction in transactions)
+            _displayService.DisplayTransaction(transaction);
+
+        WaitForKey();
+    }
+    private void FindTransactionById()
+    {
+        Console.Clear();
+        PrintHeader("FIND TRANSACTION");
+
+        WriteColored("\n  Transaction ID: ", ConsoleColor.Cyan);
+        string? id = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            ShowMessage("Transaction ID cannot be empty.", false);
+            return;
+        }
+
+        var transaction = _explorerService.FindById(id);
+
+        if (transaction == null)
+        {
+            ShowMessage($"Transaction '{id}' not found.", false);
+            return;
+        }
+
+        _displayService.DisplayTransaction(transaction);
+        WaitForKey();
+    }
     private void ShowChainMetrics()
     {
         Console.Clear();
@@ -137,7 +284,6 @@ public class MenuService
 
         WaitForKey();
     }
-
     private void ChangeDifficulty()
     {
         Console.Clear();
@@ -164,16 +310,49 @@ public class MenuService
     }
     private void AddBlock()
     {
-        Console.Clear();
-        PrintHeader("ADD BLOCK");
-
-        WriteColored("\n  Block data: ", ConsoleColor.Cyan);
-
-        string? data = Console.ReadLine();
-
-        if (string.IsNullOrWhiteSpace(data))
+        while (true)
         {
-            ShowMessage("Block data cannot be empty.", false);
+            Console.Clear();
+            PrintHeader("ADD BLOCK");
+
+            ShowStatusBar();
+
+            Console.WriteLine();
+
+            PrintInfo("Transactions in pool", _blockchainService.TransactionPool.Count.ToString());
+
+            PrintSeparator();
+
+            PrintOption(1, "Add block");
+            PrintOption(2, "Add transaction to pool");
+            PrintOption(3, "Back");
+
+            WriteColored("\n  >>> ", ConsoleColor.Cyan);
+
+            switch (Console.ReadLine())
+            {
+                case "1":
+                    MineBlock();
+                    return;
+
+                case "2":
+                    AddTransaction();
+                    break;
+
+                case "3":
+                    return;
+
+                default:
+                    ShowMessage("Invalid option.", false);
+                    return;
+            }
+        }
+    }
+    private void MineBlock()
+    {
+        if (_blockchainService.TransactionPool.Count == 0)
+        {
+            ShowMessage("Transaction pool is empty.", false);
             return;
         }
 
@@ -181,7 +360,8 @@ public class MenuService
         {
             PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            var metrics = _blockchainService.AddBlock(data, "N/A");
+            var metrics = _blockchainService.AddBlock(_blockchainService.TransactionPool, "N/A");
+
             if (metrics != null)
                 _changeMetrics = metrics;
 
@@ -194,49 +374,83 @@ public class MenuService
             ShowMessage(ex.Message, false);
         }
     }
-    private void ShowChain()
+    private void AddTransaction()
     {
         Console.Clear();
-        _displayService.Display(_blockchainService.Chain);
-        WaitForKey();
-    }
-    private void ChangeData()
-    {
-        Console.Clear();
-        PrintHeader("CHANGE BLOCK DATA");
+        PrintHeader("ADD TRANSACTION");
 
-        var block = SelectBlock(false);
+        WriteColored("\n  From: ", ConsoleColor.Cyan);
+        string? from = Console.ReadLine();
 
-        if (block == null)
-        {
-            ShowMessage("Invalid block selection.", false);
-            return;
-        }
+        WriteColored("  To: ", ConsoleColor.Cyan);
+        string? to = Console.ReadLine();
 
-        PrintInfo("Current Data", block.Data);
-        WriteColored("\n  New data: ", ConsoleColor.Cyan);
-
-        string? data = Console.ReadLine();
-
-        if (string.IsNullOrWhiteSpace(data))
-        {
-            ShowMessage("Block data cannot be empty.", false);
-            return;
-        }
+        WriteColored("  Amount: ", ConsoleColor.Cyan);
+        decimal amount = decimal.TryParse(Console.ReadLine(), out decimal parsed) ? parsed : -1;
 
         try
         {
-            PrintStatus("Updating block...", ConsoleColor.Yellow);
+            var transaction = _transactionService.CreateTransaction(from, to, amount);
+            var validationResult = _transactionService.ValidateTransaction(transaction);
 
-            _blockchainService.ChangeData(block, data);
+            if (!validationResult.IsValid)
+            {
+                ShowMessage(validationResult.Message, validationResult.IsValid);
+                return;
+            }
 
-            ShowMessage($"Block #{block.Index} updated. Chain may require repair.");
+            _blockchainService.AddTransaction(transaction);
+
+            ShowMessage($"Transaction added to pool. Pool: {_blockchainService.TransactionPool.Count}");
         }
         catch (Exception ex)
         {
             ShowMessage(ex.Message, false);
         }
     }
+    private void ShowChain()
+    {
+        Console.Clear();
+        _displayService.Display(_blockchainService.Chain);
+        WaitForKey();
+    }
+    //private void ChangeData()
+    //{
+    //    Console.Clear();
+    //    PrintHeader("CHANGE BLOCK DATA");
+
+    //    var block = SelectBlock(false);
+
+    //    if (block == null)
+    //    {
+    //        ShowMessage("Invalid block selection.", false);
+    //        return;
+    //    }
+
+    //    PrintInfo("Current Data", block.Data);
+    //    WriteColored("\n  New data: ", ConsoleColor.Cyan);
+
+    //    string? data = Console.ReadLine();
+
+    //    if (string.IsNullOrWhiteSpace(data))
+    //    {
+    //        ShowMessage("Block data cannot be empty.", false);
+    //        return;
+    //    }
+
+    //    try
+    //    {
+    //        PrintStatus("Updating block...", ConsoleColor.Yellow);
+
+    //        _blockchainService.ChangeData(block, data);
+
+    //        ShowMessage($"Block #{block.Index} updated. Chain may require repair.");
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        ShowMessage(ex.Message, false);
+    //    }
+    //}
     private void Validate()
     {
         Console.Clear();
