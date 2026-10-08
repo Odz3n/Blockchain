@@ -9,6 +9,7 @@ public class MenuService
     private readonly DisplayService _displayService;
     private readonly ExplorerService _explorerService;
     private readonly TransactionService _transactionService;
+    private readonly WalletService _walletService;
 
     private string? _statusMessage;
     private bool _statusSuccess = true;
@@ -25,6 +26,7 @@ public class MenuService
         _displayService = new DisplayService();
         _explorerService = new(_blockchainService);
         _transactionService = new();
+        _walletService = new();
     }
     public void Run()
     {
@@ -68,6 +70,8 @@ public class MenuService
 
         PrintSeparator();
 
+        PrintOption(101, "Create wallet");
+        PrintOption(102, "List wallets");
         PrintOption(1, "Change Difficulty");
         PrintOption(2, "Add Block");
         PrintOption(3, "Show Chain");
@@ -116,11 +120,62 @@ public class MenuService
             case 10:
                 CryptoExplorer();
                 break;
+            case 101:
+                CreateWallet();
+                break;  
+            case 102:
+                ListWallets();
+                break;  
             default:
                 ShowMessage("Unknown menu option.", false);
                 break;
         }
     }
+
+    private void ListWallets()
+    {
+        Console.Clear();
+        PrintHeader("WALLETS LIST");
+
+        var wallets = _walletService.GetWallets();
+
+        if (wallets.Count == 0)
+        {
+            ShowMessage($"No registered wallets.", false);
+            return;
+        }
+
+        _displayService.DisplayWallets(wallets);
+
+        WaitForKey();
+    }
+
+    private void CreateWallet()
+    {
+        Console.Clear();
+        PrintHeader("CREATE WALLET");
+
+        WriteColored("\n  Name: ", ConsoleColor.Cyan);
+        string? name = Console.ReadLine();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                ShowMessage("Wallet's name cannot be null or empty.", false);
+                return;
+            }
+
+            var wallet = _walletService.CreateWallet(name);
+
+            ShowMessage($"Wallet for {wallet.Name} created successfully.", true);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(ex.Message, false);
+        }
+    }
+
     private void CryptoExplorer()
     {
         while (true)
@@ -417,7 +472,9 @@ public class MenuService
 
         try
         {
-            var transaction = _transactionService.CreateTransaction(type, from, to, amount);
+            var sender = _walletService.Wallets.FirstOrDefault(w => w.Address == from);
+
+            var transaction = _transactionService.CreateTransaction(type, sender, to, amount);
             var validationResult = _transactionService.ValidateTransaction(transaction);
 
             if (!validationResult.IsValid)

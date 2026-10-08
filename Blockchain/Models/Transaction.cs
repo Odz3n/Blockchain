@@ -1,4 +1,6 @@
-﻿namespace Blockchain.Models;
+﻿using System.Text;
+
+namespace Blockchain.Models;
 
 public enum Type
 {
@@ -14,11 +16,14 @@ public class Transaction
     public string To { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime Timestamp { get; set; }
+    public byte[] Signature { get; set; }
+    public byte[] PublicKey { get; set; }
     public Transaction(
         Type? type,
         string from,
         string to,
-        decimal amount)
+        decimal amount,
+        byte[] publicKey)
     {
         Id = Guid.NewGuid().ToString();
         Type = type;
@@ -26,6 +31,11 @@ public class Transaction
         To = to;
         Amount = amount;
         Timestamp = DateTime.UtcNow;
+        PublicKey = publicKey;
+    }
+    public byte[] GetDataToSign()
+    {
+        return Encoding.UTF8.GetBytes(ToRawString());
     }
     public string ToRawString()
     {

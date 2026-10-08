@@ -5,13 +5,15 @@ namespace Blockchain.Services;
 
 public class TransactionService
 {
+    private readonly WalletService _walletService = new();
     public Transaction CreateTransaction(
         Models.Type? type,
-        string? from,
-        string? to,
+        Wallet sender,
+        string to,
         decimal amount)
     {
-        var transaction = new Transaction(type, from, to, amount);
+        var transaction = new Transaction(type, sender.Address, to, amount, sender.PublicKey);
+        transaction.Signature = sender.SignTransaction(transaction);
 
         var validationResult = ValidateTransaction(transaction);
         if (!validationResult.IsValid)
@@ -55,6 +57,15 @@ public class TransactionService
                 IsValid = false,
                 Message = "Transaction amount must be greater than zero."
             };
+
+        if (!_walletService.VerifyTransactionSignature(transaction, transaction.PublicKey))
+        {
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Invalid transaction signature."
+            };
+        }
 
         return new ValidationResult
         {

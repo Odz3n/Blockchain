@@ -2,7 +2,6 @@
 using Blockchain.Models.Metrics;
 using Blockchain.Models.Validation;
 using System.Diagnostics;
-using System.Transactions;
 
 namespace Blockchain.Services;
 
@@ -10,7 +9,7 @@ public class BlockchainService
 {
     private readonly HashService _hashService;
     private readonly MiningService _miningService;
-
+    private readonly TransactionService _transactionService;
     public List<Block> Chain { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
@@ -20,7 +19,7 @@ public class BlockchainService
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
-    public List<Blockchain.Models.Transaction> TransactionPool { get; set; } = new();
+    public List<Transaction> TransactionPool { get; set; } = new();
 
     public BlockchainService(
         int difficulty = 1,
@@ -29,6 +28,7 @@ public class BlockchainService
     {
         _hashService = new();
         _miningService = new();
+        _transactionService = new();
 
         _adjustmentInterval = adjustmentInterval;
         _targetBlockTime = targetBlockTime;
@@ -37,8 +37,16 @@ public class BlockchainService
 
         AddGenesisBlock();
     }
-    public DifficultyChangeMetrics? AddBlock(List<Blockchain.Models.Transaction> transactions, string author)
+    public DifficultyChangeMetrics? AddBlock(List<Transaction> transactions, string author)
     {
+        // Validate transactions' signatures
+        foreach (var transaction in transactions)
+        {
+            var validationResult = _transactionService.ValidateTransaction(transaction);
+            if (!validationResult.IsValid)
+                throw new InvalidOperationException($"Invalid transaction: {validationResult.Message}");
+        }
+
         Block lastBlock = Chain[Chain.Count - 1];
 
         var newBlock = new Block
@@ -60,7 +68,7 @@ public class BlockchainService
             return AdjustDifficulty();
         return null;
     }
-    public void AddTransaction(Blockchain.Models.Transaction transaction)
+    public void AddTransaction(Transaction transaction)
     {
         ArgumentNullException.ThrowIfNull(transaction);
 

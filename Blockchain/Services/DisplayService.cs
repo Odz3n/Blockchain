@@ -46,6 +46,27 @@ public class DisplayService
         Line();
     }
 
+    public void DisplayWallets(IEnumerable<Wallet> wallets)
+    {
+        foreach (var wallet in wallets)
+            DisplayWallet(wallet);
+    }
+
+    public void DisplayWallet(Wallet? wallet)
+    {
+        if (wallet == null)
+        {
+            Colored("  Wallet is null.\n", ConsoleColor.Yellow);
+            return;
+        }
+
+        Header("WALLETS");
+
+        Row("Name", wallet.Name);
+        Row("Address", wallet.Address);
+        Row("PubKey", Convert.ToBase64String(wallet.PublicKey));
+    }
+
     public void DisplayTransaction(Transaction? transaction)
     {
         if (transaction == null)
