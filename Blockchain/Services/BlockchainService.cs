@@ -74,6 +74,24 @@ public class BlockchainService
 
         TransactionPool.Add(transaction);
     }
+    public void ChangeTransactionAmount(
+        int blockIndex,
+        string transactionId,
+        decimal amount)
+    {
+        var block = Chain
+            .FirstOrDefault(b => b.Index == blockIndex)
+            ?? throw new KeyNotFoundException("Block not found.");
+
+        var transaction = block.Transactions
+            .FirstOrDefault(t => t.Id == transactionId)
+            ?? throw new KeyNotFoundException("Transaction not found.");
+
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount));
+
+        transaction.Amount = amount;
+    }
     private DifficultyChangeMetrics AdjustDifficulty()
     {
         var recentBlocks = Chain

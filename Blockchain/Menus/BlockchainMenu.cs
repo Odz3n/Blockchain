@@ -64,12 +64,75 @@ public class BlockchainMenu: IMenu
                 case "8":
                     ShowChainMetrics();
                     break;
+                case "9":
+                    ChangeTransactionAmount();
+                    break;
                 case "0":
                     return;
                 default:
                     _context.SetStatus("Invalid menu option.", false);
                     break;
             }
+        }
+    }
+    private void ChangeTransactionAmount()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("CHANGE TRANSACTION AMOUNT");
+
+        // Get block
+        _renderer.WriteColored("\n  Block ID: ", ConsoleColor.Cyan);
+        if (!int.TryParse(Console.ReadLine(), out int blockId))
+        {
+            _context.SetStatus("Invalid block id.", false);
+            return;
+        }
+        var block = _blockchainService.Chain
+            .FirstOrDefault(b => b.Index == blockId);
+        if (block == null)
+        {
+            _context.SetStatus($"Block with index '{blockId}' not found.", false);
+            return;
+        }
+
+        // Get transaction
+        _renderer.WriteColored("\n  Transaction ID: ", ConsoleColor.Cyan);
+        string? transactionId = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(transactionId))
+        {
+            _context.SetStatus("Transaction's Id cannot be null or empty.", false);
+            return;
+        }
+        var transaction = block.Transactions
+            .FirstOrDefault(t => t.Id == transactionId);
+        if (transaction == null)
+        {
+            _context.SetStatus($"Transaction with id '{transactionId}' not found.", false);
+            return;
+        }
+
+        // New amount
+        _renderer.PrintInfo("Current amount", transaction.Amount.ToString());
+        _renderer.WriteColored("\n  New amount: ", ConsoleColor.Cyan);
+        if (!decimal.TryParse(Console.ReadLine(), out decimal newAmount))
+        {
+            _context.SetStatus("Invalid amount.", false);
+            return;
+        }
+        try
+        {
+            _blockchainService.ChangeTransactionAmount(blockId, transactionId, newAmount);
+            _context.SetStatus($"Transaction's amount changed to {newAmount}.");
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
         }
     }
     private void ChangeDifficulty()
@@ -397,6 +460,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(6, "Repair Chain");
         _renderer.PrintOption(7, "Toggle Metrics");
         _renderer.PrintOption(8, "Show Chain Metrics");
+        _renderer.PrintOption(9, "Change Transaction Amount");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

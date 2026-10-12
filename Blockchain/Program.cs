@@ -26,6 +26,7 @@ var explorerMenu = new ExplorerMenu(
     context);
 
 var walletMenu = new WalletMenu(
+    blockchainService,
     walletService,
     displayService,
     renderer,

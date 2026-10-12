@@ -16,7 +16,7 @@ public class Transaction
     public string To { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime Timestamp { get; set; }
-    public byte[] Signature { get; set; }
+    public byte[] Signature { get; set; } = Array.Empty<byte>();
     public byte[] PublicKey { get; set; }
     public Transaction(
         Type? type,

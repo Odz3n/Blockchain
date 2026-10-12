@@ -1,10 +1,6 @@
 ﻿using Blockchain.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Blockchain.Services;
 
@@ -12,10 +8,10 @@ public class WalletService
 {
     public Wallet CreateWallet(string name)
     {
-        using (var rsa = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+        using (var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256))
         {
-            var privateKey = rsa.ExportECPrivateKey();
-            var publicKey = rsa.ExportSubjectPublicKeyInfo();
+            var privateKey = ecdsa.ExportECPrivateKey();
+            var publicKey = ecdsa.ExportSubjectPublicKeyInfo();
 
             var address = Convert.ToBase64String(SHA256.HashData(publicKey)).Substring(0, 10);
             var wallet = new Wallet(name, address, publicKey, privateKey);
