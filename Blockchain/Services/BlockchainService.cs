@@ -39,12 +39,19 @@ public class BlockchainService
     }
     public DifficultyChangeMetrics? AddBlock(List<Transaction> transactions, string author)
     {
-        // Validate transactions' signatures
+        var validatedTransactions = new List<Transaction>();
+
         foreach (var transaction in transactions)
         {
-            var validationResult = _transactionService.ValidateTransaction(transaction);
+            var validationResult = _transactionService.ValidateTransactionWithBalance(
+                transaction,
+                Chain,
+                validatedTransactions);
+
             if (!validationResult.IsValid)
-                throw new InvalidOperationException($"Invalid transaction: {validationResult.Message}");
+                throw new InvalidOperationException(validationResult.Message);
+
+            validatedTransactions.Add(transaction);
         }
 
         Block lastBlock = Chain[Chain.Count - 1];
@@ -57,6 +64,9 @@ public class BlockchainService
             PrevHash = lastBlock.Hash,
             Difficulty = Difficulty
         };
+
+        var coinbase = _transactionService.CreateCoinbaseTransaction(author, 50);
+        newBlock.Transactions.Insert(0, coinbase);
 
         _miningService.MineBlock(newBlock, Difficulty);
 

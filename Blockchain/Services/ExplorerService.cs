@@ -40,6 +40,12 @@ public class ExplorerService
             .Where(t => t.Type == type)
             .ToList();
     }
+    public List<Transaction>? GetTransactionHistory(Wallet wallet)
+    {
+        return GetTransactions()
+            .Where(t => t.From == wallet.Address || t.To == wallet.Address)
+            .ToList();
+    }
     private IEnumerable<Transaction> GetTransactions()
     {
         return _blockchainService.Chain

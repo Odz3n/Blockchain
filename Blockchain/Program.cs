@@ -6,10 +6,11 @@ var context = new MenuContext(showMetrics: false);
 var renderer = new ConsoleRenderer(context);
 
 var blockchainService = new BlockchainService(2);
-var displayService = new DisplayService();
 var explorerService = new ExplorerService(blockchainService);
 var transactionService = new TransactionService();
 var walletService = new WalletService();
+var balanceService = new BalanceService();
+var displayService = new DisplayService(balanceService, blockchainService);
 
 var blockchainMenu = new BlockchainMenu(
     blockchainService,
@@ -20,6 +21,7 @@ var blockchainMenu = new BlockchainMenu(
     context);
 
 var explorerMenu = new ExplorerMenu(
+    walletService,
     explorerService,
     displayService,
     renderer,

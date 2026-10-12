@@ -6,17 +6,20 @@ namespace Blockchain.Menus;
 
 public class ExplorerMenu: IMenu
 {
+    private readonly WalletService _walletService;
     private readonly ExplorerService _explorerService;
     private readonly DisplayService _displayService;
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _menuContext;
 
     public ExplorerMenu(
+        WalletService walletService,
         ExplorerService explorerService,
         DisplayService displayService,
         ConsoleRenderer consoleRenderer,
         MenuContext menuContext)
     {
+        _walletService = walletService;
         _explorerService = explorerService;
         _displayService = displayService;
         _renderer = consoleRenderer;
@@ -27,6 +30,8 @@ public class ExplorerMenu: IMenu
     {
         while (true)
         {
+            Console.Clear();
+
             _renderer.PrintHeader("CRYPTO EXPLORER");
             _renderer.ShowStatusBar();
 
@@ -37,6 +42,7 @@ public class ExplorerMenu: IMenu
             _renderer.PrintOption(3, "Find by Amount+");
             _renderer.PrintOption(4, "Biggest Transaction");
             _renderer.PrintOption(5, "Find by Type");
+            _renderer.PrintOption(6, "Transaction History");
             _renderer.PrintOption(0, "Back");
 
             _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -58,12 +64,49 @@ public class ExplorerMenu: IMenu
                 case "5":
                     GetTransactionByType();
                     break;
+                case "6":
+                    GetTransactionHistory();
+                    break;
                 case "0":
                     return;
                 default:
                     _menuContext.SetStatus("Invalid option.", false);
                     break;
             }
+        }
+    }
+
+    private void GetTransactionHistory()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("TRANSACTION HISTORY");
+
+        _renderer.WriteColored("\n  Wallet owner address: ", ConsoleColor.Cyan);
+        string? walletOwnerAddress = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(walletOwnerAddress))
+        {
+            _menuContext.SetStatus("Wallet owner address cannot be empty.", false);
+            return;
+        }
+
+        try
+        {
+            var wallet = _walletService.GetWallets()
+                .FirstOrDefault(w => w.Address == walletOwnerAddress);
+            if (wallet == null)
+            {
+                _menuContext.SetStatus($"Wallet for address '{walletOwnerAddress}' not found.", false);
+                return;
+            }
+
+            var transactions = _explorerService.GetTransactionHistory(wallet) ?? new();
+            _displayService.DisplayTransactionHistory(transactions);
+            _renderer.WaitForKey();
+        }
+        catch (Exception ex)
+        {
+            _menuContext.SetStatus(ex.Message, false);
+            return;
         }
     }
     private void GetTransactionByType()

@@ -6,7 +6,8 @@ public enum Type
 {
     Transfer,
     Purchase,
-    Gift
+    Gift,
+    Coinbase
 }
 public class Transaction
 {
@@ -18,6 +19,7 @@ public class Transaction
     public DateTime Timestamp { get; set; }
     public byte[] Signature { get; set; } = Array.Empty<byte>();
     public byte[] PublicKey { get; set; }
+    public bool IsCoinbase { get; set; }
     public Transaction(
         Type? type,
         string from,
@@ -32,6 +34,7 @@ public class Transaction
         Amount = amount;
         Timestamp = DateTime.UtcNow;
         PublicKey = publicKey;
+        IsCoinbase = false;
     }
     public byte[] GetDataToSign()
     {

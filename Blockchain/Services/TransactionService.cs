@@ -6,6 +6,7 @@ namespace Blockchain.Services;
 public class TransactionService
 {
     private readonly WalletService _walletService = new();
+    private readonly BalanceService _balanceService = new();
     public Transaction CreateTransaction(
         Models.Type? type,
         Wallet sender,
@@ -19,6 +20,16 @@ public class TransactionService
         if (!validationResult.IsValid)
             throw new InvalidOperationException($"Invalid transaction: {validationResult.Message}");
 
+        return transaction;
+    }
+    public Transaction CreateCoinbaseTransaction(
+        string minerAddress,
+        decimal reward)
+    {
+        var transaction = new Transaction(Models.Type.Coinbase, "Coinbase", minerAddress, reward, null)
+        {
+            IsCoinbase = true
+        };
         return transaction;
     }
     public ValidationResult ValidateTransaction(Transaction transaction)
@@ -35,6 +46,13 @@ public class TransactionService
             {
                 IsValid = false,
                 Message = "Type is null."
+            };
+
+        if (transaction.IsCoinbase)
+            return new ValidationResult
+            {
+                IsValid = true,
+                Message = "Transaction is valid."
             };
 
         if (string.IsNullOrWhiteSpace(transaction.From))
@@ -72,5 +90,22 @@ public class TransactionService
             IsValid = true,
             Message = "Transaction is valid."
         };
+    }
+    public ValidationResult ValidateTransactionWithBalance(
+        Transaction transaction,
+        List<Block> chain,
+        List<Transaction> transactionPool)
+    {
+        var validationResult = ValidateTransaction(transaction);
+        if (!validationResult.IsValid)
+            return new ValidationResult
+            {
+                IsValid = validationResult.IsValid,
+                Message = validationResult.Message
+            };
+        bool hasSufficientBalance = _balanceService.HasSufficientBalance(transaction.From, transaction.Amount, chain, transactionPool);
+        if (!hasSufficientBalance)
+            return new ValidationResult { IsValid = false, Message = "Insufficient balance for the transaction." };
+        return new ValidationResult { IsValid = true, Message = "Transaction is valid and has sufficient balance." };
     }
 }

@@ -7,6 +7,17 @@ public class DisplayService
 {
     private const int Width = 46;
 
+    private readonly BalanceService _balanceService;
+    private readonly BlockchainService _blockchainService;
+
+    public DisplayService(
+        BalanceService balanceService,
+        BlockchainService blockchainService)
+    {
+        _balanceService = balanceService;
+        _blockchainService = blockchainService;
+    }
+
     public void Display(List<Block> chain)
     {
         Header($"BLOCKCHAIN [{chain.Count} blocks]");
@@ -46,6 +57,17 @@ public class DisplayService
         Line();
     }
 
+    public void DisplayTransactionHistory(List<Transaction> transactions)
+    {
+        DisplayTransactions(transactions);
+    }
+
+    // TODO: impl
+    public void DisplayWalletStatement(List<Block> chain, Wallet wallet)
+    {
+        // TODO: impl
+    }
+
     public void DisplayWallets(IEnumerable<Wallet> wallets)
     {
         foreach (var wallet in wallets)
@@ -65,6 +87,7 @@ public class DisplayService
         Row("Name", wallet.Name);
         Row("Address", wallet.Address);
         Row("PubKey", Convert.ToBase64String(wallet.PublicKey));
+        Row("Balance", _balanceService.GetBalance(wallet.Address, _blockchainService.Chain).ToString());
     }
 
     public void DisplayTransaction(Transaction? transaction)

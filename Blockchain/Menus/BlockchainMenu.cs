@@ -198,18 +198,29 @@ public class BlockchainMenu: IMenu
     }
     private void MineBlock()
     {
-        if (_blockchainService.TransactionPool.Count == 0)
-        {
-            _context.SetStatus("Transaction pool is empty.", false);
-            return;
-        }
+        //if (_blockchainService.TransactionPool.Count == 0)
+        //{
+        //    _context.SetStatus("Transaction pool is empty.", false);
+        //    return;
+        //}
         try
         {
+            Console.Clear();
+            _renderer.PrintHeader("MINE BLOCK");
+
+            _renderer.WriteColored("\n  Miner Address: ", ConsoleColor.Cyan);
+            string? minerAddress = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(minerAddress))
+            {
+                _context.SetStatus("Miner address cannot be null or empty.", false);
+                return;
+            }
+
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
             var metrics = _blockchainService.AddBlock(
                 _blockchainService.TransactionPool,
-                "N/A");
+                minerAddress);
 
             if (metrics != null)
                 _context.ChangeMetrics = metrics;
@@ -249,7 +260,10 @@ public class BlockchainMenu: IMenu
                 .FirstOrDefault(w => w.Address == from);
 
             var transaction = _transactionService.CreateTransaction(type, sender, to, amount);
-            var validationResult = _transactionService.ValidateTransaction(transaction);
+            var validationResult = _transactionService.ValidateTransactionWithBalance(
+                transaction,
+                _blockchainService.Chain,
+                _blockchainService.TransactionPool);
 
             if (!validationResult.IsValid)
             {
