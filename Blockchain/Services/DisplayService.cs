@@ -65,6 +65,11 @@ public class DisplayService
         DisplayTransactions(transactions);
     }
 
+    public void DisplayMemPoolState(List<Transaction> mempool)
+    {
+        DisplayTransactions(mempool);
+    }
+
     public void DisplayWalletStatement(Wallet wallet)
     {
         decimal balance = 0;

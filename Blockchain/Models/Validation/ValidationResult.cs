@@ -9,5 +9,6 @@ namespace Blockchain.Models.Validation;
 public class ValidationResult
 {
     public bool IsValid { get; set; }
+    public int? BlockIndex { get; set; }
     public string Message { get; set; } = string.Empty;
 }

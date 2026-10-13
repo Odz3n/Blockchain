@@ -10,16 +10,18 @@ public class BlockchainService
     private readonly HashService _hashService;
     private readonly MiningService _miningService;
     private readonly TransactionService _transactionService;
+    private readonly BalanceService _balanceService;
     public List<Block> Chain { get; set; } = new();
+    public List<Transaction> MemPool { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
+    public decimal MiningReward { get; set; } = 50m;
 
     private readonly double _targetBlockTime = 2;
     private readonly int _adjustmentInterval = 2;
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
-    public List<Transaction> TransactionPool { get; set; } = new();
 
     public BlockchainService(
         int difficulty = 1,
@@ -29,6 +31,7 @@ public class BlockchainService
         _hashService = new();
         _miningService = new();
         _transactionService = new();
+        _balanceService = new();
 
         _adjustmentInterval = adjustmentInterval;
         _targetBlockTime = targetBlockTime;
@@ -37,42 +40,27 @@ public class BlockchainService
 
         AddGenesisBlock();
     }
-    public DifficultyChangeMetrics? AddBlock(List<Transaction> transactions, string author)
+    public DifficultyChangeMetrics? MinePendingTransaction(string minerAddress)
     {
-        var validatedTransactions = new List<Transaction>();
-
-        foreach (var transaction in transactions)
-        {
-            var validationResult = _transactionService.ValidateTransactionWithBalance(
-                transaction,
-                Chain,
-                validatedTransactions);
-
-            if (!validationResult.IsValid)
-                throw new InvalidOperationException(validationResult.Message);
-
-            validatedTransactions.Add(transaction);
-        }
-
         Block lastBlock = Chain[Chain.Count - 1];
 
         var newBlock = new Block
         {
             Index = lastBlock.Index + 1,
-            Transactions = transactions.ToList(),
-            Author = author,
+            Transactions = MemPool.ToList(),
+            Author = minerAddress,
             PrevHash = lastBlock.Hash,
             Difficulty = Difficulty
         };
 
-        var coinbase = _transactionService.CreateCoinbaseTransaction(author, 50);
+        var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, MiningReward);
         newBlock.Transactions.Insert(0, coinbase);
 
         _miningService.MineBlock(newBlock, Difficulty);
 
         Chain.Add(newBlock);
 
-        TransactionPool.Clear();
+        MemPool.Clear();
 
         if (newBlock.Index % _adjustmentInterval == 0)
             return AdjustDifficulty();
@@ -80,9 +68,11 @@ public class BlockchainService
     }
     public void AddTransaction(Transaction transaction)
     {
-        ArgumentNullException.ThrowIfNull(transaction);
+        var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool);
+        if (!validationResult.IsValid)
+            throw new ArgumentException($"Invalid transaction: {validationResult.Message}");
 
-        TransactionPool.Add(transaction);
+        MemPool.Add(transaction);
     }
     public void ChangeTransactionAmount(
         int blockIndex,
@@ -150,7 +140,7 @@ public class BlockchainService
 
         return metrics;
     }
-    public ValidationResult IsValid()
+    public ValidationResult Validate()
     {
         for (int i = 1; i < Chain.Count; i++)
         {
@@ -160,17 +150,19 @@ public class BlockchainService
             string currentHash = _hashService.ComputeHash(currentBlock);
 
             if (currentBlock.Hash != currentHash)
-                return new ValidationResult 
-                { 
+                return new ValidationResult
+                {
                     IsValid = false,
-                    Message = $"Invalid block: {Chain[i].Index}. Invalid Hash."
+                    BlockIndex = currentBlock.Index,
+                    Message = "Invalid block hash."
                 };
 
             if (prevBlock.Hash != currentBlock.PrevHash)
                 return new ValidationResult
                 {
                     IsValid = false,
-                    Message = $"Invalid block: {Chain[i].Index}. Invalid prevHash."
+                    BlockIndex = currentBlock.Index,
+                    Message = "Invalid block prevHash."
                 };
 
             var target = new string('0', currentBlock.Difficulty);
@@ -178,7 +170,8 @@ public class BlockchainService
                 return new ValidationResult 
                 {
                     IsValid = false,
-                    Message = $"Invalid block: {Chain[i].Index}. Invalid Hash Mask."
+                    BlockIndex = currentBlock.Index,
+                    Message = $"Invalid block Hash Mask."
                 };
         }
         return new ValidationResult

@@ -13,6 +13,9 @@ public class TransactionService
         string to,
         decimal amount)
     {
+        if (type == Models.Type.Coinbase)
+            throw new InvalidOperationException("Coinbase transactions cannot be created manually.");
+
         var transaction = new Transaction(type, sender.Address, to, amount, sender.PublicKey);
         transaction.Signature = sender.SignTransaction(transaction);
 
@@ -26,7 +29,7 @@ public class TransactionService
         string minerAddress,
         decimal reward)
     {
-        var transaction = new Transaction(Models.Type.Coinbase, "Coinbase", minerAddress, reward, null)
+        var transaction = new Transaction(Models.Type.Coinbase, "SYSTEM", minerAddress, reward, null)
         {
             IsCoinbase = true
         };
@@ -48,11 +51,11 @@ public class TransactionService
                 Message = "Type is null."
             };
 
-        if (transaction.IsCoinbase)
+        if (transaction.IsCoinbase || transaction.Type == Models.Type.Coinbase)
             return new ValidationResult
             {
-                IsValid = true,
-                Message = "Transaction is valid."
+                IsValid = false,
+                Message = "Coinbase transactions require separate validation."
             };
 
         if (string.IsNullOrWhiteSpace(transaction.From))
@@ -67,6 +70,13 @@ public class TransactionService
             {
                 IsValid = false,
                 Message = "Recipient is required."
+            };
+
+        if (transaction.From == transaction.To)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Sender and recipient cannot be the same."
             };
 
         if (transaction.Amount <= 0)
@@ -96,6 +106,9 @@ public class TransactionService
         List<Block> chain,
         List<Transaction> transactionPool)
     {
+        if (transactionPool.Contains(transaction))
+            transactionPool.Remove(transaction);
+
         var validationResult = ValidateTransaction(transaction);
         if (!validationResult.IsValid)
             return new ValidationResult

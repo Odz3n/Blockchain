@@ -67,6 +67,9 @@ public class BlockchainMenu: IMenu
                 case "9":
                     ChangeTransactionAmount();
                     break;
+                case "10":
+                    ShowMemPoolState();
+                    break;
                 case "0":
                     return;
                 default:
@@ -75,6 +78,22 @@ public class BlockchainMenu: IMenu
             }
         }
     }
+
+    private void ShowMemPoolState()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("MEM POOL STATE");
+
+        if (_blockchainService.MemPool.Count == 0)
+        {
+            _context.SetStatus("MemPool is empty.", true);
+            return;
+        }
+
+        _displayService.DisplayMemPoolState(_blockchainService.MemPool);
+        _renderer.WaitForKey();
+    }
+
     private void ChangeTransactionAmount()
     {
         Console.Clear();
@@ -168,9 +187,7 @@ public class BlockchainMenu: IMenu
 
             Console.WriteLine();
 
-            _renderer.PrintInfo(
-                "Transactions in pool",
-                _blockchainService.TransactionPool.Count.ToString());
+            _renderer.PrintInfo("Transactions in pool", _blockchainService.MemPool.Count.ToString());
 
             _renderer.PrintSeparator();
 
@@ -218,9 +235,7 @@ public class BlockchainMenu: IMenu
 
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            var metrics = _blockchainService.AddBlock(
-                _blockchainService.TransactionPool,
-                minerAddress);
+            var metrics = _blockchainService.MinePendingTransaction(minerAddress);
 
             if (metrics != null)
                 _context.ChangeMetrics = metrics;
@@ -263,7 +278,7 @@ public class BlockchainMenu: IMenu
             var validationResult = _transactionService.ValidateTransactionWithBalance(
                 transaction,
                 _blockchainService.Chain,
-                _blockchainService.TransactionPool);
+                _blockchainService.MemPool);
 
             if (!validationResult.IsValid)
             {
@@ -273,7 +288,7 @@ public class BlockchainMenu: IMenu
 
             _blockchainService.AddTransaction(transaction);
 
-            _context.SetStatus($"Transaction added to pool. Pool: {_blockchainService.TransactionPool.Count}");
+            _context.SetStatus($"Transaction added to pool. Pool: {_blockchainService.MemPool.Count}");
         }
         catch (Exception ex)
         {
@@ -303,7 +318,7 @@ public class BlockchainMenu: IMenu
 
         try
         {
-            var validationResult = _blockchainService.IsValid();
+            var validationResult = _blockchainService.Validate();
             _context.SetStatus(validationResult.Message, validationResult.IsValid);
         }
         catch (Exception ex)
@@ -358,7 +373,7 @@ public class BlockchainMenu: IMenu
             _context.LastRepairMetrics = _blockchainService.RepairChain(startIndex);
             _context.LastMiningMetrics = null;
 
-            var result = _blockchainService.IsValid();
+            var result = _blockchainService.Validate();
 
             _context.SetStatus(result.IsValid
                     ? "Chain repaired successfully."
@@ -462,7 +477,7 @@ public class BlockchainMenu: IMenu
 
         _renderer.PrintInfo("Difficulty", _blockchainService.Difficulty.ToString());
         _renderer.PrintInfo("Blocks", _blockchainService.Chain.Count.ToString());
-        _renderer.PrintInfo("Pool", _blockchainService.TransactionPool.Count.ToString());
+        _renderer.PrintInfo("Pool", _blockchainService.MemPool.Count.ToString());
 
         _renderer.PrintSeparator();
 
@@ -475,6 +490,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(7, "Toggle Metrics");
         _renderer.PrintOption(8, "Show Chain Metrics");
         _renderer.PrintOption(9, "Change Transaction Amount");
+        _renderer.PrintOption(10, "Show MemPool State");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
