@@ -29,6 +29,14 @@ public class WalletService
             return ecdsa.VerifyData(Encoding.UTF8.GetBytes(transaction.ToRawString()), transaction.Signature, HashAlgorithmName.SHA256);
         }
     }
+    public string? GetNameByAddress(string address)
+    {
+        return Wallets
+            .Where(w => w.Address == address)
+            .Select(w => w.Name)
+            .FirstOrDefault()??"N/A"
+            .Trim();
+    }
 
     public List<Wallet> Wallets = new();
     public List<Wallet> GetWallets()

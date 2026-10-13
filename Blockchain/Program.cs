@@ -10,7 +10,7 @@ var explorerService = new ExplorerService(blockchainService);
 var transactionService = new TransactionService();
 var walletService = new WalletService();
 var balanceService = new BalanceService();
-var displayService = new DisplayService(balanceService, blockchainService);
+var displayService = new DisplayService(balanceService, blockchainService, walletService);
 
 var blockchainMenu = new BlockchainMenu(
     blockchainService,

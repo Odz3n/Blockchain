@@ -43,6 +43,7 @@ public class ExplorerMenu: IMenu
             _renderer.PrintOption(4, "Biggest Transaction");
             _renderer.PrintOption(5, "Find by Type");
             _renderer.PrintOption(6, "Transaction History");
+            _renderer.PrintOption(7, "Wallet Statement");
             _renderer.PrintOption(0, "Back");
 
             _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -67,12 +68,48 @@ public class ExplorerMenu: IMenu
                 case "6":
                     GetTransactionHistory();
                     break;
+                case "7":
+                    GetWalletStatement();
+                    break;
                 case "0":
                     return;
                 default:
                     _menuContext.SetStatus("Invalid option.", false);
                     break;
             }
+        }
+    }
+
+    private void GetWalletStatement()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("WALLET STATEMENT");
+
+        _renderer.WriteColored("\n  Wallet owner address: ", ConsoleColor.Cyan);
+        string? walletOwnerAddress = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(walletOwnerAddress))
+        {
+            _menuContext.SetStatus("Wallet owner address cannot be empty.", false);
+            return;
+        }
+
+        try
+        {
+            var wallet = _walletService.GetWallets()
+                .FirstOrDefault(w => w.Address == walletOwnerAddress);
+            if (wallet == null)
+            {
+                _menuContext.SetStatus($"Wallet for address '{walletOwnerAddress}' not found.", false);
+                return;
+            }
+
+            _displayService.DisplayWalletStatement(wallet);
+            _renderer.WaitForKey();
+        }
+        catch (Exception ex)
+        {
+            _menuContext.SetStatus(ex.Message, false);
+            return;
         }
     }
 
