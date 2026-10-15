@@ -1,7 +1,6 @@
 ﻿using Blockchain.Menus;
 using Blockchain.Services;
 using Blockchain.UI;
-using Blockchain.Models;
 
 var context = new MenuContext(showMetrics: false);
 var renderer = new ConsoleRenderer(context);

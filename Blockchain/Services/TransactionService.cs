@@ -35,7 +35,9 @@ public class TransactionService
         };
         return transaction;
     }
-    public ValidationResult ValidateTransaction(Transaction transaction)
+    public ValidationResult ValidateTransaction(
+        Transaction transaction,
+        bool includeSignatureValidation = true)
     {
         if (transaction == null)
             return new ValidationResult 
@@ -86,13 +88,16 @@ public class TransactionService
                 Message = "Transaction amount must be greater than zero."
             };
 
-        if (!_walletService.VerifyTransactionSignature(transaction, transaction.PublicKey))
+        if (includeSignatureValidation)
         {
-            return new ValidationResult
+            if (!_walletService.VerifyTransactionSignature(transaction, transaction.PublicKey))
             {
-                IsValid = false,
-                Message = "Invalid transaction signature."
-            };
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    Message = "Invalid transaction signature."
+                };
+            }
         }
 
         return new ValidationResult
@@ -120,5 +125,57 @@ public class TransactionService
         if (!hasSufficientBalance)
             return new ValidationResult { IsValid = false, Message = "Insufficient balance for the transaction." };
         return new ValidationResult { IsValid = true, Message = "Transaction is valid and has sufficient balance." };
+    }
+    public ValidationResult ValidateCoinbase(
+        Block block,
+        decimal miningReward)
+    {
+        var coinbases = block.Transactions
+            .Where(t => t.IsCoinbase == true || t.Type == Models.Type.Coinbase)
+            .ToList();
+
+        if (coinbases.Count != 1)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = $"Expected 1 coinbase transaction, found {coinbases.Count}."
+            };
+
+        var coinbase = coinbases.First();
+
+        if (!coinbase.IsCoinbase || coinbase.Type != Models.Type.Coinbase)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Invalid coinbase type or flag."
+            };
+
+        if (coinbase.From != "SYSTEM")
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Coinbase sender must be SYSTEM."
+            };
+
+        if (coinbase.To != block.Author)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Coinbase recipient must be the block miner."
+            };
+
+        if (coinbase.Amount != miningReward)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = $"Invalid mining reward. Expected {miningReward}, got {coinbase.Amount}."
+            };
+
+        return new ValidationResult { IsValid = true, Message = "Coinbase transaction is valid." };
     }
 }

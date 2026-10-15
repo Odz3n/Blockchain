@@ -70,12 +70,55 @@ public class BlockchainMenu: IMenu
                 case "10":
                     ShowMemPoolState();
                     break;
+                case "11":
+                    ValidateEconomy();
+                    break;
                 case "0":
                     return;
                 default:
                     _context.SetStatus("Invalid menu option.", false);
                     break;
             }
+        }
+    }
+
+    private void ValidateEconomy()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("VALIDATE ECONOMY");
+
+        _renderer.WriteColored("\n  Include Integrity Validation (Y/n)?: ", ConsoleColor.Cyan);
+        string? includeIntegrity = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(includeIntegrity))
+        {
+            _context.SetStatus("Answer cannot be null or empty.", false);
+            return;
+        }
+        _renderer.WriteColored("\n  Include Signature Validation (Y/n)?: ", ConsoleColor.Cyan);
+        string? includeSignature = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(includeSignature))
+        {
+            _context.SetStatus("Answer cannot be null or empty.", false);
+            return;
+        }
+
+        try
+        {
+            var validationResult = _blockchainService.ValidateEconomy(
+                includeIntegrity.ToLowerInvariant() == "y" ? true : false,
+                includeSignature.ToLowerInvariant() == "y" ? true : false);
+            if (!validationResult.IsValid)
+            {
+                _context.SetStatus($"At Block #{validationResult.BlockIndex}: {validationResult.Message}", validationResult.IsValid);
+                return;
+            }
+            _context.SetStatus($"{validationResult.Message}", validationResult.IsValid);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
         }
     }
 
@@ -491,6 +534,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(8, "Show Chain Metrics");
         _renderer.PrintOption(9, "Change Transaction Amount");
         _renderer.PrintOption(10, "Show MemPool State");
+        _renderer.PrintOption(11, "Validate Economy");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

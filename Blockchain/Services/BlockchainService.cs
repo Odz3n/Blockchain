@@ -87,8 +87,8 @@ public class BlockchainService
             .FirstOrDefault(t => t.Id == transactionId)
             ?? throw new KeyNotFoundException("Transaction not found.");
 
-        if (amount <= 0)
-            throw new ArgumentOutOfRangeException(nameof(amount));
+        //if (amount <= 0)
+        //    throw new ArgumentOutOfRangeException(nameof(amount));
 
         transaction.Amount = amount;
     }
@@ -178,6 +178,88 @@ public class BlockchainService
         {
             IsValid = true,
             Message = "Blockchain is valid."
+        };
+    }
+    public ValidationResult ValidateEconomy(
+        bool includeIntegrityValidation = true,
+        bool includeSignatureValidation = true)
+    {
+        if (includeIntegrityValidation)
+        {
+            var integrityResult = Validate();
+            if (!integrityResult.IsValid)
+                return integrityResult;
+        }
+
+        var balances = new Dictionary<string, decimal>();
+        foreach (var block in Chain)
+        {
+            if (block.Index == 0)
+            {
+                if (block.Transactions.Count != 0)
+                    return new ValidationResult
+                    {
+                        IsValid = false,
+                        BlockIndex = block.Index,
+                        Message = "Genesis block must be empty."
+                    };
+
+                continue;
+            }
+
+            var coinbaseResult = _transactionService.ValidateCoinbase(block, MiningReward);
+            if (!coinbaseResult.IsValid)
+                return coinbaseResult;
+
+            var regularResult = ValidateRegularTransactions(block, balances, includeSignatureValidation);
+            if (!regularResult.IsValid)
+                return regularResult;
+
+            var coinbase = block.Transactions.First(t => t.IsCoinbase);
+            _balanceService.ApplyCoinbase(coinbase, balances);
+        }
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Blockchain economy is valid."
+        };
+    }
+    private ValidationResult ValidateRegularTransactions(
+        Block block,
+        Dictionary<string, decimal> balances,
+        bool includeSignatureValidation = true)
+    {
+        foreach (var transaction in block.Transactions
+            .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase))
+        {
+            // Check transaction
+            var transactionResult = _transactionService.ValidateTransaction(transaction, includeSignatureValidation);
+            if (!transactionResult.IsValid)
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    BlockIndex = block.Index,
+                    Message = transactionResult.Message
+                };
+
+            // Check balance
+            var balanceResult = _balanceService.ValidateBalance(transaction, balances);
+            if (!balanceResult.IsValid)
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    BlockIndex = block.Index,
+                    Message = balanceResult.Message
+                };
+
+            // Apply historical balance
+            _balanceService.ApplyTransaction(transaction, balances);
+        }
+        return new ValidationResult
+        {
+            IsValid = true,
+            BlockIndex = block.Index,
+            Message = "Regular transactions are valid."
         };
     }
     public ChainMetrics GetChainMetrics()
