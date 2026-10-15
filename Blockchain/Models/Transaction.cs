@@ -16,6 +16,7 @@ public class Transaction
     public string From { get; set; } = string.Empty;
     public string To { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal Fee { get; set; }
     public DateTime Timestamp { get; set; }
     public byte[] Signature { get; set; } = Array.Empty<byte>();
     public byte[] PublicKey { get; set; }
@@ -25,6 +26,7 @@ public class Transaction
         string from,
         string to,
         decimal amount,
+        decimal fee,
         byte[] publicKey)
     {
         Id = Guid.NewGuid().ToString();
@@ -32,6 +34,7 @@ public class Transaction
         From = from;
         To = to;
         Amount = amount;
+        Fee = fee;
         Timestamp = DateTime.UtcNow;
         PublicKey = publicKey;
         IsCoinbase = false;
@@ -42,10 +45,10 @@ public class Transaction
     }
     public string ToRawString()
     {
-        return $"{Id}\n{Type}\n{From}\n{To}\n{Amount}\n{Timestamp}";
+        return $"{Id}\n{Type}\n{From}\n{To}\n{Amount}\n{Fee}\n{Timestamp}";
     }
     public override string ToString()
     {
-        return $"\n\t - Id: {Id}\n\t - Type: {Type}\n\t - From: {From}\n\t - To: {To}\n\t - Amount: {Amount}\n\t - Timestamp: {Timestamp}\n";
+        return $"\n\t - Id: {Id}\n\t - Type: {Type}\n\t - From: {From}\n\t - To: {To}\n\t - Amount: {Amount}\n\t - Fee: {Fee}\n\t - Timestamp: {Timestamp}\n";
     }
 }

@@ -72,54 +72,55 @@ public class DisplayService
 
     public void DisplayWalletStatement(Wallet wallet)
     {
-        decimal balance = 0;
-        decimal initialBalance = 0;
-        decimal totalReceived = 0;
-        decimal totalSpent = 0;
-        decimal miningRewards = 0;
+        decimal balance = 0m;
+        decimal initialBalance = 0m;
+        decimal totalReceived = 0m;
+        decimal totalSpent = 0m;
+        decimal totalFeePaid = 0m;
+        decimal totalFeeEarned = 0m;
+        decimal miningRewards = 0m;
 
         Header($"WALLET STATEMENT [{wallet.Name}]");
 
         Row("Address", wallet.Address);
         Row("Initial Balance", $"{initialBalance:F2}");
 
-        // Get blocks with transactions for the wallet owner
         var blocks = _blockchainService.Chain
             .OrderBy(b => b.Index)
-            .Select(b => new
-            {
-                b.Index,
-                Transactions = b.Transactions
-                    .Where(t => t.From == wallet.Address || t.To == wallet.Address)
-                    .OrderByDescending(t => t.IsCoinbase)
-                    .ToList()
-            })
-            .Where(b => b.Transactions.Count > 0)
             .ToList();
 
-        if (blocks.Count == 0)
-        {
-            Colored("\n  No transactions found.\n", ConsoleColor.Yellow);
-        }
-
+        bool hasTransactions = false;
         foreach (var block in blocks)
         {
+            var transactions = block.Transactions
+                .Where(t => t.From == wallet.Address || t.To == wallet.Address)
+                .OrderByDescending(t => t.IsCoinbase)
+                .ToList();
+
+            decimal blockFees = block.Author == wallet.Address
+                ? block.Transactions
+                    .Where(t => !t.IsCoinbase)
+                    .Sum(t => t.Fee)
+                : 0m;
+
+            if (transactions.Count == 0 && blockFees == 0)
+                continue;
+
+            hasTransactions = true;
             Colored($"\n  BLOCK #{block.Index}\n", ConsoleColor.Cyan);
             Line();
 
-            foreach (var trans in block.Transactions)
+            foreach (var trans in transactions)
             {
-                decimal change = 0;
+                decimal change = 0m;
 
                 if (trans.IsCoinbase)
                 {
                     change = trans.Amount;
-                    totalReceived += trans.Amount;
                     miningRewards += trans.Amount;
 
                     Colored("  [MINING] ", ConsoleColor.Yellow);
                     Console.Write("COINBASE");
-
                     Colored($" +{trans.Amount:F2}\n", ConsoleColor.Green);
                 }
                 else
@@ -135,18 +136,20 @@ public class DisplayService
 
                     if (trans.From == wallet.Address)
                     {
-                        change -= trans.Amount;
+                        change -= trans.Amount + trans.Fee;
                         totalSpent += trans.Amount;
+                        totalFeePaid += trans.Fee;
                     }
 
                     Colored(change > 0 ? "  [IN]  " : change < 0 ? "  [OUT] " : "  [SELF]",
                         change > 0 ? ConsoleColor.Green : change < 0 ? ConsoleColor.Red : ConsoleColor.DarkGray);
-
-                    Colored($"  [{(trans.Type.HasValue ? trans.Type.Value.ToString() : "UNKNOWN").ToUpperInvariant()}] ", ConsoleColor.DarkCyan);
+                    Colored($"  [{(trans.Type.HasValue ? trans.Type.Value.ToString() : "UNKNOWN").ToUpperInvariant()}] ",
+                        ConsoleColor.DarkCyan);
                     Console.Write($"{sender} -> {recipient}");
-
-                    Colored($"  {change:+0.00;-0.00;0.00}\n",
+                    Colored($"  {change:+0.00;-0.00;0.00}",
                         change > 0 ? ConsoleColor.Green : change < 0 ? ConsoleColor.Red : ConsoleColor.DarkGray);
+                    Colored($"  [FEE {trans.Fee:F2}]\n",
+                        ConsoleColor.DarkGray);
                 }
 
                 balance += change;
@@ -154,26 +157,38 @@ public class DisplayService
                 Colored("  Balance: ", ConsoleColor.DarkGray);
                 Colored($"{balance:F2}\n", ConsoleColor.White);
             }
+
+            if (blockFees > 0)
+            {
+                balance += blockFees;
+                totalFeeEarned += blockFees;
+
+                Colored("  [MINING] ", ConsoleColor.Yellow);
+                Console.Write("TRANSACTION FEES");
+                Colored($" +{blockFees:F2}\n", ConsoleColor.Green);
+                Colored("  Balance: ", ConsoleColor.DarkGray);
+                Colored($"{balance:F2}\n", ConsoleColor.White);
+            }
         }
 
+        if (!hasTransactions)
+            Colored("\n  No transactions found.\n", ConsoleColor.Yellow);
+
         Header("WALLET STATEMENT SUMMARY");
-
         Row("Initial Balance", $"{initialBalance:F2}");
-
-        Colored("  Total Received: ", ConsoleColor.DarkGray);
+        Colored("  Total Received     : ", ConsoleColor.DarkGray);
         Colored($"+{totalReceived:F2}\n", ConsoleColor.Green);
-
-        Colored("  Total Spent   : ", ConsoleColor.DarkGray);
+        Colored("  Total Spent        : ", ConsoleColor.DarkGray);
         Colored($"-{totalSpent:F2}\n", ConsoleColor.Red);
-
-        Colored("  Mining Rewards: ", ConsoleColor.DarkGray);
+        Colored("  Total Fees Paid    : ", ConsoleColor.DarkGray);
+        Colored($"-{totalFeePaid:F2}\n", ConsoleColor.Red);
+        Colored("  Total Fees Earned  : ", ConsoleColor.DarkGray);
+        Colored($"+{totalFeeEarned:F2}\n", ConsoleColor.Green);
+        Colored("  Mining Rewards     : ", ConsoleColor.DarkGray);
         Colored($"+{miningRewards:F2}\n", ConsoleColor.Yellow);
-
         Line();
-
         Colored("  FINAL BALANCE : ", ConsoleColor.Cyan);
         Colored($"{balance:F2}\n", ConsoleColor.White);
-
         Line();
     }
 
@@ -196,7 +211,7 @@ public class DisplayService
         Row("Name", wallet.Name);
         Row("Address", wallet.Address);
         Row("PubKey", Convert.ToBase64String(wallet.PublicKey));
-        Row("Balance", _balanceService.GetBalance(wallet.Address, _blockchainService.Chain).ToString());
+        Row("Balance", _balanceService.GetAvailableBalance(wallet.Address, _blockchainService.Chain, _blockchainService.MemPool).ToString());
     }
 
     public void DisplayTransaction(Transaction? transaction)
@@ -209,10 +224,12 @@ public class DisplayService
 
         Header("TRANSACTION");
 
+        Row("Id", transaction.Id);
         Row("Type", transaction.Type.ToString()!);
         Row("From", transaction.From);
         Row("To", transaction.To);
         Row("Amount", transaction.Amount.ToString("F2"));
+        Row("Fee", transaction.Fee.ToString("F2"));
     }
 
     public void DisplayTransactions(IEnumerable<Transaction> transactions)

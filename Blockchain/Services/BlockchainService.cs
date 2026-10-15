@@ -22,6 +22,8 @@ public class BlockchainService
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
+    private int _maxTransactionsPerBlock = 3;
+    private int _halvingInterval = 3;
 
     public BlockchainService(
         int difficulty = 1,
@@ -42,25 +44,31 @@ public class BlockchainService
     }
     public DifficultyChangeMetrics? MinePendingTransaction(string minerAddress)
     {
+        var transactions = SelectTransactionsForBlock(_maxTransactionsPerBlock);
+        var totalFee = transactions.Sum(t => t.Fee);
+
         Block lastBlock = Chain[Chain.Count - 1];
 
         var newBlock = new Block
         {
             Index = lastBlock.Index + 1,
-            Transactions = MemPool.ToList(),
+            Transactions = transactions,
             Author = minerAddress,
             PrevHash = lastBlock.Hash,
             Difficulty = Difficulty
         };
 
-        var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, MiningReward);
+        var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, GetCurrentMinerReward());
+        var rewordTransaction = _transactionService.CreateRewordTransaction(minerAddress, totalFee);
         newBlock.Transactions.Insert(0, coinbase);
+        newBlock.Transactions.Insert(1, rewordTransaction);
 
         _miningService.MineBlock(newBlock, Difficulty);
 
         Chain.Add(newBlock);
 
-        MemPool.Clear();
+        foreach (var trans in transactions)
+            MemPool.Remove(trans);
 
         if (newBlock.Index % _adjustmentInterval == 0)
             return AdjustDifficulty();
@@ -73,6 +81,33 @@ public class BlockchainService
             throw new ArgumentException($"Invalid transaction: {validationResult.Message}");
 
         MemPool.Add(transaction);
+    }
+    public bool CancelTransaction(
+        string transactionId,
+        string senderAddress)
+    {
+        var senderTransactions = MemPool
+            .Where(t => t.From == senderAddress)
+            .ToList();
+
+        if (senderTransactions.Count <= 0)
+            throw new KeyNotFoundException($"There are no active transactions by {senderAddress}.");
+
+        var transaction = senderTransactions
+            .Where(t => t.Id == transactionId)
+            .FirstOrDefault()
+            ?? throw new KeyNotFoundException($"Transaction {transactionId} by {senderAddress} not found.");
+
+        return MemPool.Remove(transaction);
+    }
+    public List<Transaction> SelectTransactionsForBlock(int maxCount)
+    {
+        return MemPool
+            .Where(t => t.Fee >= 1)
+            .OrderByDescending(t => t.Fee)
+            .ThenBy(t => t.Timestamp)
+            .Take(maxCount)
+            .ToList();
     }
     public void ChangeTransactionAmount(
         int blockIndex,
@@ -207,13 +242,15 @@ public class BlockchainService
                 continue;
             }
 
-            var coinbaseResult = _transactionService.ValidateCoinbase(block, MiningReward);
+            var coinbaseResult = _transactionService.ValidateCoinbase(block, GetCurrentMinerReward());
             if (!coinbaseResult.IsValid)
                 return coinbaseResult;
 
             var regularResult = ValidateRegularTransactions(block, balances, includeSignatureValidation);
             if (!regularResult.IsValid)
                 return regularResult;
+
+            _balanceService.ApplyMiningFees(block, balances);
 
             var coinbase = block.Transactions.First(t => t.IsCoinbase);
             _balanceService.ApplyCoinbase(coinbase, balances);
@@ -353,5 +390,10 @@ public class BlockchainService
         _miningService.MineBlock(genesis, Difficulty);
 
         Chain.Add(genesis);
+    }
+    private decimal GetCurrentMinerReward()
+    {
+        int halving = Chain.Count / _halvingInterval;
+        return MiningReward / (decimal)Math.Pow(2, halving);
     }
 }

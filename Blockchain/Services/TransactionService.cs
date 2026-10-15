@@ -11,12 +11,13 @@ public class TransactionService
         Models.Type? type,
         Wallet sender,
         string to,
-        decimal amount)
+        decimal amount,
+        decimal fee)
     {
         if (type == Models.Type.Coinbase)
             throw new InvalidOperationException("Coinbase transactions cannot be created manually.");
 
-        var transaction = new Transaction(type, sender.Address, to, amount, sender.PublicKey);
+        var transaction = new Transaction(type, sender.Address, to, amount, fee, sender.PublicKey);
         transaction.Signature = sender.SignTransaction(transaction);
 
         var validationResult = ValidateTransaction(transaction);
@@ -29,11 +30,18 @@ public class TransactionService
         string minerAddress,
         decimal reward)
     {
-        var transaction = new Transaction(Models.Type.Coinbase, "SYSTEM", minerAddress, reward, null)
+        var transaction = new Transaction(Models.Type.Coinbase, "SYSTEM", minerAddress, reward, 0, null)
         {
             IsCoinbase = true
         };
         return transaction;
+    }
+    public Transaction CreateRewordTransaction(
+        string minerAddress,
+        decimal reword)
+    {
+        var rewordTransaction = new Transaction(Models.Type.Transfer, "RewordFee", minerAddress, reword, 0, null);
+        return rewordTransaction;
     }
     public ValidationResult ValidateTransaction(
         Transaction transaction,
@@ -88,6 +96,13 @@ public class TransactionService
                 Message = "Transaction amount must be greater than zero."
             };
 
+        if (transaction.Fee <= 0)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Transaction fee must be greater than zero."
+            };
+
         if (includeSignatureValidation)
         {
             if (!_walletService.VerifyTransactionSignature(transaction, transaction.PublicKey))
@@ -121,9 +136,9 @@ public class TransactionService
                 IsValid = validationResult.IsValid,
                 Message = validationResult.Message
             };
-        bool hasSufficientBalance = _balanceService.HasSufficientBalance(transaction.From, transaction.Amount, chain, transactionPool);
+        bool hasSufficientBalance = _balanceService.HasSufficientBalance(transaction, chain, transactionPool);
         if (!hasSufficientBalance)
-            return new ValidationResult { IsValid = false, Message = "Insufficient balance for the transaction." };
+            return new ValidationResult { IsValid = false, Message = $"Insufficient balance for transaction {transaction.Id}." };
         return new ValidationResult { IsValid = true, Message = "Transaction is valid and has sufficient balance." };
     }
     public ValidationResult ValidateCoinbase(

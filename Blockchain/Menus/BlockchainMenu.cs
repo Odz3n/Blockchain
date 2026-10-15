@@ -68,9 +68,6 @@ public class BlockchainMenu: IMenu
                     ChangeTransactionAmount();
                     break;
                 case "10":
-                    ShowMemPoolState();
-                    break;
-                case "11":
                     ValidateEconomy();
                     break;
                 case "0":
@@ -235,7 +232,9 @@ public class BlockchainMenu: IMenu
             _renderer.PrintSeparator();
 
             _renderer.PrintOption(1, "Mine block");
-            _renderer.PrintOption(2, "Add transaction to pool");
+            _renderer.PrintOption(2, "Add transaction to the pool");
+            _renderer.PrintOption(3, "Cancel transaction from the pool");
+            _renderer.PrintOption(4, "Show MemPool State");
             _renderer.PrintOption(0, "Back");
 
             _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -248,6 +247,12 @@ public class BlockchainMenu: IMenu
                 case "2":
                     AddTransaction();
                     break;
+                case "3":
+                    RemoveTransaction();
+                    break;
+                case "4":
+                    ShowMemPoolState();
+                    break;
                 case "0":
                     return;
                 default:
@@ -256,13 +261,51 @@ public class BlockchainMenu: IMenu
             }
         }
     }
+    private void RemoveTransaction()
+    {
+        try
+        {
+            Console.Clear();
+            _renderer.PrintHeader("REMOVE TRANSACTION");
+
+            _renderer.WriteColored("\n  Sender Address: ", ConsoleColor.Cyan);
+            string? senderAddress = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(senderAddress))
+            {
+                _context.SetStatus("Sender address cannot be null or empty.", false);
+                return;
+            }
+
+            _renderer.WriteColored("\n  Transaction ID: ", ConsoleColor.Cyan);
+            string? transactionId = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(transactionId))
+            {
+                _context.SetStatus("Transaction's Id cannot be null or empty.", false);
+                return;
+            }
+
+            var result = _blockchainService.CancelTransaction(transactionId, senderAddress);
+            if (!result)
+            {
+                _context.SetStatus($"Transaction {transactionId} cancellation failed.", result);
+                return;
+            }
+            _context.SetStatus($"Transaction {transactionId} canceled successfully.", result);
+            return;
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
+        }
+    }
     private void MineBlock()
     {
-        //if (_blockchainService.TransactionPool.Count == 0)
-        //{
-        //    _context.SetStatus("Transaction pool is empty.", false);
-        //    return;
-        //}
         try
         {
             Console.Clear();
@@ -312,12 +355,15 @@ public class BlockchainMenu: IMenu
         _renderer.WriteColored("  Amount: ", ConsoleColor.Cyan);
         decimal amount = decimal.TryParse(Console.ReadLine(), out decimal parsed) ? parsed : -1;
 
+        _renderer.WriteColored("  Fee: ", ConsoleColor.Cyan);
+        decimal fee = decimal.TryParse(Console.ReadLine(), out decimal parsedFee) ? parsedFee : -1;
+
         try
         {
             var sender = _walletService.Wallets
                 .FirstOrDefault(w => w.Address == from);
 
-            var transaction = _transactionService.CreateTransaction(type, sender, to, amount);
+            var transaction = _transactionService.CreateTransaction(type, sender, to, amount, fee);
             var validationResult = _transactionService.ValidateTransactionWithBalance(
                 transaction,
                 _blockchainService.Chain,
@@ -533,8 +579,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(7, "Toggle Metrics");
         _renderer.PrintOption(8, "Show Chain Metrics");
         _renderer.PrintOption(9, "Change Transaction Amount");
-        _renderer.PrintOption(10, "Show MemPool State");
-        _renderer.PrintOption(11, "Validate Economy");
+        _renderer.PrintOption(10, "Validate Economy");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
