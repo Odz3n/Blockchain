@@ -15,7 +15,7 @@ public class BlockchainService
     public List<Transaction> MemPool { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
-    public decimal MiningReward { get; set; } = 50m;
+    public decimal InitialMiningReward { get; private set; } = 50m;
 
     private readonly double _targetBlockTime = 2;
     private readonly int _adjustmentInterval = 2;
@@ -58,10 +58,12 @@ public class BlockchainService
             Difficulty = Difficulty
         };
 
-        var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, GetCurrentMinerReward());
-        var rewordTransaction = _transactionService.CreateRewordTransaction(minerAddress, totalFee);
+        var expectedReward = GetMinerReward(newBlock.Index) + transactions
+            .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
+            .Sum(t => t.Fee);
+
+        var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, expectedReward);
         newBlock.Transactions.Insert(0, coinbase);
-        newBlock.Transactions.Insert(1, rewordTransaction);
 
         _miningService.MineBlock(newBlock, Difficulty);
 
@@ -242,15 +244,17 @@ public class BlockchainService
                 continue;
             }
 
-            var coinbaseResult = _transactionService.ValidateCoinbase(block, GetCurrentMinerReward());
-            if (!coinbaseResult.IsValid)
-                return coinbaseResult;
-
             var regularResult = ValidateRegularTransactions(block, balances, includeSignatureValidation);
             if (!regularResult.IsValid)
                 return regularResult;
 
-            _balanceService.ApplyMiningFees(block, balances);
+            var expectedReward = GetMinerReward(block.Index) + block.Transactions
+                .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
+                .Sum(t => t.Fee);
+
+            var coinbaseResult = _transactionService.ValidateCoinbase(block, expectedReward);
+            if (!coinbaseResult.IsValid)
+                return coinbaseResult;
 
             var coinbase = block.Transactions.First(t => t.IsCoinbase);
             _balanceService.ApplyCoinbase(coinbase, balances);
@@ -393,7 +397,19 @@ public class BlockchainService
     }
     private decimal GetCurrentMinerReward()
     {
-        int halving = Chain.Count / _halvingInterval;
-        return MiningReward / (decimal)Math.Pow(2, halving);
+        return GetMinerReward(Chain.Count);
+    }
+    private decimal GetMinerReward(int blockIndex)
+    {
+        if (blockIndex <= 0)
+            throw new ArgumentOutOfRangeException(nameof(blockIndex));
+
+        int halvings = (blockIndex - 1) / _halvingInterval;
+        decimal reward = InitialMiningReward;
+
+        for (int i = 0; i < halvings; i++)
+            reward /= 2m;
+
+        return reward;
     }
 }

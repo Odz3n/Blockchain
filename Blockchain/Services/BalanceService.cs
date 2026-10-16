@@ -108,14 +108,4 @@ public class BalanceService
         // Apply for miner
         balances[coinbase.To] = balances.GetValueOrDefault(coinbase.To, 0m) + coinbase.Amount;
     }
-    public void ApplyMiningFees(
-        Block block,
-        Dictionary<string, decimal> balances)
-    {
-        decimal totalFees = block.Transactions
-            .Where(t => !t.IsCoinbase)
-            .Sum(t => t.Fee);
-
-        balances[block.Author] = balances.GetValueOrDefault(block.Author, 0m) + totalFees;
-    }
 }
