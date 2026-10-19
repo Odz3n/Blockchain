@@ -15,7 +15,6 @@ public class BlockchainService
     public List<Transaction> MemPool { get; set; } = new();
 
     public int Difficulty { get; private set; } = 4;
-    public decimal InitialMiningReward { get; private set; } = 50m;
 
     private readonly double _targetBlockTime = 2;
     private readonly int _adjustmentInterval = 2;
@@ -23,7 +22,9 @@ public class BlockchainService
     private readonly int _maxDifficulty = 6;
 
     private int _maxTransactionsPerBlock = 3;
-    private int _halvingInterval = 3;
+    public decimal InitialMiningReward { get; private set; } = 64m;
+    private int _halvingInterval = 4;
+    private int _minimumReward = 2;
 
     public BlockchainService(
         int difficulty = 1,
@@ -42,7 +43,7 @@ public class BlockchainService
 
         AddGenesisBlock();
     }
-    public DifficultyChangeMetrics? MinePendingTransaction(string minerAddress)
+    public DifficultyChangeMetrics? MinePendingTransactions(string minerAddress)
     {
         var transactions = SelectTransactionsForBlock(_maxTransactionsPerBlock);
         var totalFee = transactions.Sum(t => t.Fee);
@@ -58,6 +59,7 @@ public class BlockchainService
             Difficulty = Difficulty
         };
 
+        // Current mining reward + sum of transactions' fee
         var expectedReward = GetMinerReward(newBlock.Index) + transactions
             .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
             .Sum(t => t.Fee);
@@ -74,6 +76,7 @@ public class BlockchainService
 
         if (newBlock.Index % _adjustmentInterval == 0)
             return AdjustDifficulty();
+
         return null;
     }
     public void AddTransaction(Transaction transaction)
@@ -303,6 +306,36 @@ public class BlockchainService
             Message = "Regular transactions are valid."
         };
     }
+    public ValidationResult ValidateMiningRewards()
+    {
+        foreach (var block in Chain.Skip(1))
+        {
+            var fees = block.Transactions
+                .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
+                .Sum(t => t.Fee);
+
+            var expectedReward = GetMinerReward(block.Index);
+
+            var expectedCoinbase = expectedReward + fees;
+
+            var actualCoinbase = block.Transactions
+                .FirstOrDefault(t => t.IsCoinbase && t.Type == Models.Type.Coinbase)
+                ?? throw new KeyNotFoundException($"Coinbase transaction for block #{block.Index} not found.");
+
+            if (expectedCoinbase != actualCoinbase.Amount)
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    BlockIndex = block.Index,
+                    Message = $"Block #{block.Index}; Expected Reward: {expectedReward}; Fees: {fees}; Expected Coinbase: {expectedCoinbase}; Actual Coinbase: {actualCoinbase}; Status: INVALID"
+                };
+        }
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Mining rewards are valid"
+        };
+    }
     public ChainMetrics GetChainMetrics()
     {
         double minMiningDuration = Chain.Min(b => b.MiningDuration);
@@ -405,11 +438,28 @@ public class BlockchainService
             throw new ArgumentOutOfRangeException(nameof(blockIndex));
 
         int halvings = (blockIndex - 1) / _halvingInterval;
-        decimal reward = InitialMiningReward;
 
-        for (int i = 0; i < halvings; i++)
-            reward /= 2m;
+        // Clamped reward after halving
+        return Math.Clamp(
+            InitialMiningReward / (decimal)Math.Pow(2, halvings),
+            _minimumReward,
+            InitialMiningReward);
+    }
+    public decimal GetTotalCoinsCreated()
+    {
+        decimal totalCoins = 0;
+        foreach (var block in Chain.Skip(1))
+        {
+            var blockTotalFee = block.Transactions
+                .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
+                .Sum(t => t.Fee);
 
-        return reward;
+            var coinbase = block.Transactions
+                .FirstOrDefault(t => t.IsCoinbase && t.Type == Models.Type.Coinbase)
+                    ?? throw new KeyNotFoundException("Coinbase transactions not found.");
+
+            totalCoins += coinbase.Amount - blockTotalFee;
+        }
+        return totalCoins;
     }
 }

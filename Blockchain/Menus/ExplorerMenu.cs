@@ -44,6 +44,7 @@ public class ExplorerMenu: IMenu
             _renderer.PrintOption(5, "Find by Type");
             _renderer.PrintOption(6, "Transaction History");
             _renderer.PrintOption(7, "Wallet Statement");
+            _renderer.PrintOption(8, "Total Coins Created");
             _renderer.PrintOption(0, "Back");
 
             _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -71,12 +72,34 @@ public class ExplorerMenu: IMenu
                 case "7":
                     GetWalletStatement();
                     break;
+                case "8":
+                    GetTotalCoinsCreated();
+                    break;
                 case "0":
                     return;
                 default:
                     _menuContext.SetStatus("Invalid option.", false);
                     break;
             }
+        }
+    }
+
+    private void GetTotalCoinsCreated()
+    {
+        try
+        {
+            _menuContext.SetStatus($"{_explorerService.GetTotalCoinsCreated()} total coins created.");
+            return;
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _menuContext.SetStatus(ex.Message, false);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _menuContext.SetStatus(ex.Message, false);
+            return;
         }
     }
 

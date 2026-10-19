@@ -46,6 +46,10 @@ public class ExplorerService
             .Where(t => t.From == wallet.Address || t.To == wallet.Address)
             .ToList();
     }
+    public decimal GetTotalCoinsCreated()
+    {
+        return _blockchainService.GetTotalCoinsCreated();
+    }
     private IEnumerable<Transaction> GetTransactions()
     {
         return _blockchainService.Chain

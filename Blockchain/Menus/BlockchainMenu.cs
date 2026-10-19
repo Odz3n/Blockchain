@@ -70,6 +70,9 @@ public class BlockchainMenu: IMenu
                 case "10":
                     ValidateEconomy();
                     break;
+                case "11":
+                    ValidateMiningRewards();
+                    break;
                 case "0":
                     return;
                 default:
@@ -78,7 +81,22 @@ public class BlockchainMenu: IMenu
             }
         }
     }
-
+    private void ValidateMiningRewards()
+    {
+        try
+        {
+            var validationResult = _blockchainService.ValidateMiningRewards();
+            _context.SetStatus(validationResult.Message, validationResult.IsValid);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+        }
+        catch (Exception ex)
+        {
+            _context.SetStatus(ex.Message, false);
+        }
+    }
     private void ValidateEconomy()
     {
         Console.Clear();
@@ -321,7 +339,7 @@ public class BlockchainMenu: IMenu
 
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            var metrics = _blockchainService.MinePendingTransaction(minerAddress);
+            var metrics = _blockchainService.MinePendingTransactions(minerAddress);
 
             if (metrics != null)
                 _context.ChangeMetrics = metrics;
@@ -580,6 +598,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(8, "Show Chain Metrics");
         _renderer.PrintOption(9, "Change Transaction Amount");
         _renderer.PrintOption(10, "Validate Economy");
+        _renderer.PrintOption(11, "Validate Mining Rewards");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
