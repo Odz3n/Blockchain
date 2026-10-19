@@ -10,15 +10,18 @@ public class DisplayService
     private readonly BalanceService _balanceService;
     private readonly BlockchainService _blockchainService;
     private readonly WalletService _walletService;
+    private readonly HashService _hashService;
 
     public DisplayService(
         BalanceService balanceService,
         BlockchainService blockchainService,
-        WalletService walletService)
+        WalletService walletService,
+        HashService hashService)
     {
         _balanceService = balanceService;
         _blockchainService = blockchainService;
         _walletService = walletService;
+        _hashService = hashService;
     }
 
     public void Display(List<Block> chain)
@@ -47,6 +50,7 @@ public class DisplayService
         Row("Hash", block.Hash);
         Row("PrevHash", block.PrevHash);
         Row("Difficulty", block.Difficulty.ToString());
+        Row("MerkleRoot", block.MerkleRoot);
         Row("MiningDuration", block.MiningDuration.ToString());
         Row("Transactions", block.Transactions.Count.ToString());
         if (block.Transactions != null && block.Transactions.Count > 0)
@@ -68,6 +72,40 @@ public class DisplayService
     public void DisplayMemPoolState(List<Transaction> mempool)
     {
         DisplayTransactions(mempool);
+    }
+
+    public void DisplayMerkleTree(List<Transaction> transactions)
+    {
+        Header("MARKLE TREE");
+        if (transactions.Count <= 0)
+            Colored("No transactions to build a MerkleTree from.", ConsoleColor.Yellow);
+
+        List<string> leaves = new List<string>();
+        foreach (var tx in transactions)
+            leaves.Add(_hashService.ComputeSHA256(tx.ToRawString()));
+
+        int level = 0;
+        while (true)
+        {
+
+            Colored($"\nLevel {level}\n", ConsoleColor.DarkGray);
+            Colored($"{string.Join("\n", leaves.Select(hash => hash.Substring(0, 4)))}", ConsoleColor.White);
+
+            if (leaves.Count == 1)
+                break;
+
+            List<string> newLevel = new List<string>();
+            for (int i = 0; i < leaves.Count; i += 2)
+            {
+                var left = leaves[i];
+                var right = i + 1 < leaves.Count ? leaves[i + 1] : leaves[i];
+
+                newLevel.Add(_hashService.ComputeSHA256(left + right));
+            }
+            leaves = newLevel;
+            level++;
+        }
+        Colored($"\n\nMerkleTree root: {leaves[0].Substring(0, 4)}\n", ConsoleColor.Yellow);
     }
 
     public void DisplayWalletStatement(Wallet wallet)

@@ -10,5 +10,6 @@ public class Block
     public string PrevHash { get; set; } = null!;
     public long Nonce { get; set; } = 0;
     public int Difficulty { get; set; }
+    public string MerkleRoot { get; set; } = string.Empty;
     public double MiningDuration { get; set; }
 }

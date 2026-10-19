@@ -73,6 +73,9 @@ public class BlockchainMenu: IMenu
                 case "11":
                     ValidateMiningRewards();
                     break;
+                case "12":
+                    DisplayMerkleTree();
+                    break;
                 case "0":
                     return;
                 default:
@@ -81,6 +84,29 @@ public class BlockchainMenu: IMenu
             }
         }
     }
+
+    private void DisplayMerkleTree()
+    {
+        Console.Clear();
+        _renderer.WriteColored("\n  Block ID: ", ConsoleColor.Cyan);
+        if (!int.TryParse(Console.ReadLine(), out int blockId))
+        {
+            _context.SetStatus("Invalid block id.", false);
+            return;
+        }
+        var block = _blockchainService.Chain
+            .FirstOrDefault(b => b.Index == blockId);
+        if (block == null)
+        {
+            _context.SetStatus($"Block with index '{blockId}' not found.", false);
+            return;
+        }
+
+        _displayService.DisplayMerkleTree(block.Transactions);
+
+        _renderer.WaitForKey();
+    }
+
     private void ValidateMiningRewards()
     {
         try
@@ -599,6 +625,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(9, "Change Transaction Amount");
         _renderer.PrintOption(10, "Validate Economy");
         _renderer.PrintOption(11, "Validate Mining Rewards");
+        _renderer.PrintOption(12, "Display Merkle Tree");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

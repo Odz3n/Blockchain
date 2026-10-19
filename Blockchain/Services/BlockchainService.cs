@@ -66,6 +66,7 @@ public class BlockchainService
 
         var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, expectedReward);
         newBlock.Transactions.Insert(0, coinbase);
+        newBlock.MerkleRoot = _hashService.ComputeMerkleRoot(newBlock.Transactions);
 
         _miningService.MineBlock(newBlock, Difficulty);
 
@@ -212,6 +213,14 @@ public class BlockchainService
                     IsValid = false,
                     BlockIndex = currentBlock.Index,
                     Message = $"Invalid block Hash Mask."
+                };
+
+            if (currentBlock.MerkleRoot != _hashService.ComputeMerkleRoot(currentBlock.Transactions))
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    BlockIndex = currentBlock.Index,
+                    Message = "Invalid MarkleRoot hash."
                 };
         }
         return new ValidationResult
