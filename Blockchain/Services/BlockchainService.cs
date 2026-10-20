@@ -43,7 +43,7 @@ public class BlockchainService
 
         AddGenesisBlock();
     }
-    public DifficultyChangeMetrics? MinePendingTransactions(string minerAddress)
+    public Block MinePendingTransactions(string minerAddress)
     {
         var transactions = SelectTransactionsForBlock(_maxTransactionsPerBlock);
         var totalFee = transactions.Sum(t => t.Fee);
@@ -76,9 +76,9 @@ public class BlockchainService
             MemPool.Remove(trans);
 
         if (newBlock.Index % _adjustmentInterval == 0)
-            return AdjustDifficulty();
+            AdjustDifficulty();
 
-        return null;
+        return newBlock;
     }
     public void AddTransaction(Transaction transaction)
     {
@@ -133,7 +133,7 @@ public class BlockchainService
 
         transaction.Amount = amount;
     }
-    private DifficultyChangeMetrics AdjustDifficulty()
+    private void AdjustDifficulty()
     {
         var recentBlocks = Chain
             .Where(b => b.Index > 0)
@@ -145,41 +145,40 @@ public class BlockchainService
 
         var avgTime = recentBlocks.Average(b => b.MiningDuration);
 
-        var metrics = new DifficultyChangeMetrics
-        {
-            TargetBlockTime = _targetBlockTime,
-            AvgMiningTime = avgTime,
-            OldDifficulty = Difficulty
-        };
+        //var metrics = new DifficultyChangeMetrics
+        //{
+        //    TargetBlockTime = _targetBlockTime,
+        //    AvgMiningTime = avgTime,
+        //    OldDifficulty = Difficulty
+        //};
 
         if (avgTime < _targetBlockTime * 0.25)
         {
             ChangeDifficulty(Math.Min(_maxDifficulty, Difficulty + 2));
-            metrics.Reason = "Average mining time below 25% of target.";
+            //metrics.Reason = "Average mining time below 25% of target.";
         }
         else if (avgTime < _targetBlockTime * 0.5)
         {
             ChangeDifficulty(Math.Min(_maxDifficulty, Difficulty + 1));
-            metrics.Reason = "Average mining time below 50% of target.";
+            //metrics.Reason = "Average mining time below 50% of target.";
         }
         else if (avgTime > _targetBlockTime * 4)
         {
             ChangeDifficulty(Math.Max(_minDifficulty, Difficulty - 2));
-            metrics.Reason = "Average mining time above 400% of target.";
+            //metrics.Reason = "Average mining time above 400% of target.";
         }
         else if (avgTime > _targetBlockTime * 2)
         {
             ChangeDifficulty(Math.Max(_minDifficulty, Difficulty - 1));
-            metrics.Reason = "Average mining time above 200% of target.";
+            //metrics.Reason = "Average mining time above 200% of target.";
         }
-        else
-        {
-            metrics.Reason = "Nothing changed.";
-        }
+        //else
+        //{
+        //    metrics.Reason = "Nothing changed.";
+        //}
 
-        metrics.NewDifficulty = Difficulty;
-
-        return metrics;
+        //metrics.NewDifficulty = Difficulty;
+        //return metrics;
     }
     public ValidationResult Validate()
     {
@@ -409,6 +408,59 @@ public class BlockchainService
             Message = "Merkle Root is Valid"
         };
     }
+    public ValidationResult AddReceivedBlock(Block block)
+    {
+        var lastBlock = Chain[^1];
+        if (block.PrevHash != lastBlock.Hash)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = $"Invalid Block: PrevHash does not match."
+            };
+        if (block.Index != lastBlock.Index + 1)
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Invalid Block: Index is not sequential."
+            };
+        if (block.Hash != _hashService.ComputeHash(block))
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Invalid Block: Hash is incorrect."
+            };
+        if (block.MerkleRoot != _hashService.ComputeMerkleRoot(block.Transactions))
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Invalid Block: Merkle Root is incorrect."
+            };
+        if (!block.Hash.StartsWith(new string('0', block.Difficulty)))
+            return new ValidationResult
+            {
+                IsValid = false,
+                BlockIndex = block.Index,
+                Message = "Invalid Block: Hash does not meet difficulty requirements."
+            };
+
+        var transactionIds = block.Transactions
+            .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
+            .Select(t => t.Id)
+            .ToList();
+        MemPool.RemoveAll(t => transactionIds.Contains(t.Id));
+
+        Chain.Add(block);
+        return new ValidationResult
+        {
+            IsValid = true,
+            BlockIndex = block.Index,
+            Message = "Block is valid."
+        };
+    }
     public ChainMetrics GetChainMetrics()
     {
         double minMiningDuration = Chain.Min(b => b.MiningDuration);
@@ -500,10 +552,6 @@ public class BlockchainService
         _miningService.MineBlock(genesis, Difficulty);
 
         Chain.Add(genesis);
-    }
-    private decimal GetCurrentMinerReward()
-    {
-        return GetMinerReward(Chain.Count);
     }
     private decimal GetMinerReward(int blockIndex)
     {

@@ -13,11 +13,18 @@ var balanceService = new BalanceService();
 var hashService = new HashService();
 var displayService = new DisplayService(balanceService, blockchainService, walletService, hashService);
 
+// ########################################
+var networkService = new NetworkService(
+    port: int.Parse(args[0]),
+    peers: args.Skip(1).Select(int.Parse).ToList());
+// ########################################
+
 var blockchainMenu = new BlockchainMenu(
     blockchainService,
     transactionService,
     walletService,
     displayService,
+    networkService,
     renderer,
     context);
 
@@ -38,6 +45,7 @@ var walletMenu = new WalletMenu(
 var mainMenu = new MainMenu(
     blockchainService,
     displayService,
+    networkService,
     renderer,
     context,
     blockchainMenu,

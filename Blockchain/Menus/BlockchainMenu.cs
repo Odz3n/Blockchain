@@ -12,6 +12,7 @@ public class BlockchainMenu: IMenu
     private readonly TransactionService _transactionService;
     private readonly WalletService _walletService;
     private readonly DisplayService _displayService;
+    private readonly NetworkService _networkService;
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _context;
 
@@ -20,6 +21,7 @@ public class BlockchainMenu: IMenu
         TransactionService transactionService,
         WalletService walletService,
         DisplayService displayService,
+        NetworkService networkService,
         ConsoleRenderer renderer,
         MenuContext context)
     {
@@ -27,6 +29,7 @@ public class BlockchainMenu: IMenu
         _transactionService = transactionService;
         _walletService = walletService;
         _displayService = displayService;
+        _networkService = networkService;
         _renderer = renderer;
         _context = context;
     }
@@ -427,12 +430,8 @@ public class BlockchainMenu: IMenu
 
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            var metrics = _blockchainService.MinePendingTransactions(minerAddress);
-
-            if (metrics != null)
-                _context.ChangeMetrics = metrics;
-
-            var block = _blockchainService.Chain[^1];
+            var block = _blockchainService.MinePendingTransactions(minerAddress);
+            _networkService.BroadcastAsync("Block", block);
 
             _context.SetStatus($"Block #{block.Index} mined successfully.");
         }

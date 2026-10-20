@@ -1,6 +1,8 @@
 ﻿using Blockchain.Menus.Interfaces;
+using Blockchain.Models;
 using Blockchain.Services;
 using Blockchain.UI;
+using System.Text.Json;
 
 namespace Blockchain.Menus;
 
@@ -10,6 +12,7 @@ public class MainMenu: IMenu
     private readonly DisplayService _displayService;
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _context;
+    private readonly NetworkService _networkService;
 
     private readonly IMenu _blockchainMenu;
     private readonly IMenu _explorerMenu;
@@ -18,6 +21,7 @@ public class MainMenu: IMenu
     public MainMenu(
         BlockchainService blockchainService,
         DisplayService displayService,
+        NetworkService networkService,
         ConsoleRenderer renderer,
         MenuContext context,
         BlockchainMenu blockchainMenu,
@@ -32,6 +36,35 @@ public class MainMenu: IMenu
         _blockchainMenu = blockchainMenu;
         _explorerMenu = explorerMenu;
         _walletMenu = walletMenu;
+
+        _networkService = networkService;
+        _networkService.Start((type, message) =>
+        {
+            _context.SetStatus($"Received message of type {type}.");
+            switch (type)
+            {
+                case "Transaction":
+                    var transaction = JsonSerializer.Deserialize<Transaction>(message);
+                    if (transaction != null)
+                    {
+                        _context.SetStatus($"Received transaction from {transaction.From} to {transaction.To} for amount {transaction.Amount}.");
+                        _blockchainService.AddTransaction(transaction);
+                    }
+                    break;
+                case "Block":
+                    var block = JsonSerializer.Deserialize<Block>(message);
+                    if (block != null)
+                    {
+                        _context.SetStatus($"Received block with index {block.Index} and hash {block.Hash}");
+                        var addingResult = _blockchainService.AddReceivedBlock(block);
+                        _context.SetStatus(addingResult.Message, addingResult.IsValid);
+                    }
+                    break;
+                default:
+                    _context.SetStatus($"Received data of unsupported type.");
+                    break;
+            }
+        });
     }
 
     public void Run()
@@ -77,6 +110,7 @@ public class MainMenu: IMenu
         _renderer.PrintInfo("Difficulty", _blockchainService.Difficulty.ToString());
         _renderer.PrintInfo("Blocks", _blockchainService.Chain.Count.ToString());
         _renderer.PrintInfo("Metrics", _context.ShowMetrics ? "ON" : "OFF");
+        _renderer.PrintInfo("Port", _networkService.Port.ToString());
 
         if (_context.ShowMetrics)
         {
