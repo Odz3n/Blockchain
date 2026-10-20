@@ -76,12 +76,74 @@ public class BlockchainMenu: IMenu
                 case "12":
                     DisplayMerkleTree();
                     break;
+                case "13":
+                    VerifyMerkleProof();
+                    break;
                 case "0":
                     return;
                 default:
                     _context.SetStatus("Invalid menu option.", false);
                     break;
             }
+        }
+    }
+
+    private void VerifyMerkleProof()
+    {
+        Console.Clear();
+
+        _renderer.PrintHeader("MERKLE PROOF");
+
+        _renderer.WriteColored("\n  Block ID: ", ConsoleColor.Cyan);
+        if (!int.TryParse(Console.ReadLine(), out int blockId))
+        {
+            _context.SetStatus("Invalid block id.", false);
+            return;
+        }
+        var block = _blockchainService.Chain
+            .FirstOrDefault(b => b.Index == blockId);
+        if (block == null)
+        {
+            _context.SetStatus($"Block with index '{blockId}' not found.", false);
+            return;
+        }
+
+        _renderer.WriteColored("\n  Transaction ID: ", ConsoleColor.Cyan);
+        string? transactionId = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(transactionId))
+        {
+            _context.SetStatus("Transaction's Id cannot be null or empty.", false);
+            return;
+        }
+        var transaction = block.Transactions
+            .FirstOrDefault(t => t.Id == transactionId);
+        if (transaction == null)
+        {
+            _context.SetStatus($"Transaction with id '{transactionId}' not found.", false);
+            return;
+        }
+
+        try
+        {
+            var proof = _blockchainService.GenerateMerkleProof(block, transactionId);
+            var validationResult = _blockchainService.VerifyMerkleProof(transaction, proof, block.MerkleRoot);
+            _context.SetStatus(validationResult.Message, validationResult.IsValid);
+            return;
+        }
+        catch (ArgumentNullException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _context.SetStatus(ex.Message, false);
+            return;
         }
     }
 
@@ -626,6 +688,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(10, "Validate Economy");
         _renderer.PrintOption(11, "Validate Mining Rewards");
         _renderer.PrintOption(12, "Display Merkle Tree");
+        _renderer.PrintOption(13, "Merkle Proof");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

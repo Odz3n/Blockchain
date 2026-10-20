@@ -345,6 +345,70 @@ public class BlockchainService
             Message = "Mining rewards are valid"
         };
     }
+    public List<KeyValuePair<string, bool>> GenerateMerkleProof(Block block, string transactionId)
+    {
+        if (block == null)
+            throw new ArgumentNullException(nameof(block));
+        if (string.IsNullOrWhiteSpace(transactionId))
+            throw new ArgumentNullException(nameof(transactionId));
+
+        var targetTransaction = block.Transactions
+            .FirstOrDefault(t => t.Id == transactionId)
+            ?? throw new KeyNotFoundException($"Target transaction {transactionId} not found.");
+
+        var targetIndex = block.Transactions.IndexOf(targetTransaction);
+        var hashes = block.Transactions
+            .Select(t => _hashService.ComputeSHA256(t.ToRawString()))
+            .ToList();
+
+        var siblings = new List<KeyValuePair<string, bool>>();
+        while(hashes.Count > 1)
+        {
+            if (hashes.Count % 2 != 0)
+                hashes.Add(hashes[hashes.Count - 1]);
+
+            var siblingIndex = (targetIndex % 2 == 0) ? targetIndex + 1 : targetIndex - 1;
+            siblings.Add(new KeyValuePair<string, bool>(hashes[siblingIndex], siblingIndex % 2 == 0));
+
+            var upperLevel = new List<string>();
+            for (int i = 0; i < hashes.Count; i += 2)
+                upperLevel.Add(_hashService.ComputeSHA256(hashes[i] + hashes[i + 1]));
+
+            hashes = upperLevel;
+            targetIndex /= 2;
+        }
+        return siblings;
+    }
+    public ValidationResult VerifyMerkleProof(Transaction transaction, List<KeyValuePair<string, bool>> proof, string merkleRoot)
+    {
+        if (transaction == null)
+            throw new ArgumentNullException(nameof(transaction));
+        if (proof == null)
+            throw new ArgumentNullException(nameof(proof));
+        if (string.IsNullOrEmpty(merkleRoot))
+            throw new ArgumentNullException(nameof(merkleRoot));
+
+        var computedHash = _hashService.ComputeSHA256(transaction.ToRawString());
+        foreach (var item in proof)
+        {
+            // item.Value = true means that sibling is on the left
+            computedHash = item.Value
+                ? _hashService.ComputeSHA256(item.Key + computedHash)
+                : _hashService.ComputeSHA256(computedHash + item.Key);
+        }
+
+        if (merkleRoot != computedHash)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Invalid Merkle Root"
+            };
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Merkle Root is Valid"
+        };
+    }
     public ChainMetrics GetChainMetrics()
     {
         double minMiningDuration = Chain.Min(b => b.MiningDuration);
