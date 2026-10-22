@@ -2,6 +2,7 @@
 using Blockchain.Models.Metrics;
 using Blockchain.Models.Validation;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace Blockchain.Services;
 
@@ -11,10 +12,11 @@ public class BlockchainService
     private readonly MiningService _miningService;
     private readonly TransactionService _transactionService;
     private readonly BalanceService _balanceService;
+    private readonly StorageService _storageService;
     public List<Block> Chain { get; set; } = new();
     public List<Transaction> MemPool { get; set; } = new();
 
-    public int Difficulty { get; private set; } = 4;
+    public int Difficulty { get; set; } = 4;
 
     private readonly double _targetBlockTime = 2;
     private readonly int _adjustmentInterval = 2;
@@ -35,6 +37,7 @@ public class BlockchainService
         _miningService = new();
         _transactionService = new();
         _balanceService = new();
+        _storageService = new();
 
         _adjustmentInterval = adjustmentInterval;
         _targetBlockTime = targetBlockTime;
@@ -80,13 +83,20 @@ public class BlockchainService
 
         return newBlock;
     }
-    public void AddTransaction(Transaction transaction)
+    public Transaction AddTransaction(
+        Transaction transaction,
+        bool includeValidation = true)
     {
-        var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool);
-        if (!validationResult.IsValid)
-            throw new ArgumentException($"Invalid transaction: {validationResult.Message}");
+        if (includeValidation)
+        {
+            var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool);
+            if (!validationResult.IsValid)
+                throw new ArgumentException($"Invalid transaction: {validationResult.Message}");
+        }
 
         MemPool.Add(transaction);
+
+        return MemPool.ToList()[^1];
     }
     public bool CancelTransaction(
         string transactionId,
@@ -458,7 +468,56 @@ public class BlockchainService
         {
             IsValid = true,
             BlockIndex = block.Index,
-            Message = "Block is valid."
+            Message = $"Block #{block.Index} added successfully."
+        };
+    }
+    public ValidationResult AddReceivedTransaction(
+        Transaction transaction)
+    {
+        // Skip if already added
+        if (MemPool.Any(t => t.Id == transaction.Id))
+            return new ValidationResult
+            {
+                IsValid = true,
+                Message = "Transaction already exists in the pool."
+            };
+
+        // Validation
+        var transactions = new List<Transaction>(MemPool);
+        var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, transactions);
+        if (!validationResult.IsValid)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = $"Invalid transaction received. {validationResult.Message}"
+            };
+
+        // Adding to the pool, excluding validation because already passed
+        var newTransaction = AddTransaction(transaction, includeValidation: false);
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = $"Transaction {newTransaction.Id} added successfully."
+        };
+    }
+    public async Task SaveAsync()
+    {
+        await _storageService.SaveAsync(this);
+    }
+    public async Task<BlockchainState> LoadAsync()
+    {
+        return await _storageService.LoadAsync<BlockchainState>(Path.Combine(Directory.GetCurrentDirectory(), "save.json"));
+    }
+    public ValidationResult RestoreState(BlockchainState state)
+    {
+        Chain = state.Chain;
+        MemPool = state.MemPool;
+        Difficulty = state.Difficulty;
+
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Blockchain state restored successfully."
         };
     }
     public ChainMetrics GetChainMetrics()

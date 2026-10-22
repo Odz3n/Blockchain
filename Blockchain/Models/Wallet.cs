@@ -12,12 +12,12 @@ public class Wallet
     public string Name { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     public byte[] PublicKey { get; set; }
-    private byte[] PrivateKey { get; set; }
+    public byte[]? PrivateKey { get; set; }
     public Wallet(
         string name,
         string address,
         byte[] publicKey,
-        byte[] privateKey)
+        byte[]? privateKey = null)
     {
         Name = name;
         Address = address;

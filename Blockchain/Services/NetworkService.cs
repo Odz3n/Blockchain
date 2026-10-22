@@ -24,14 +24,22 @@ public class NetworkService
         {
             while (true)
             {
-                var client = await listener.AcceptTcpClientAsync();
-                using var reader = new StreamReader(client.GetStream());
-                string? message = await reader.ReadLineAsync();
-                if (message != null)
+                try
                 {
-                    var parts = message.Split('|');
-                    if (parts.Length == 2)
-                        onMessage(parts[0], parts[1]);
+                    using var client = await listener.AcceptTcpClientAsync();
+                    using var reader = new StreamReader(client.GetStream());
+
+                    string? message = await reader.ReadLineAsync();
+                    if (message != null)
+                    {
+                        var parts = message.Split('|');
+                        if (parts.Length == 2)
+                            onMessage(parts[0], parts[1]);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(ex.Message);
                 }
             }
         });

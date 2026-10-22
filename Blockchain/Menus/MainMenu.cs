@@ -13,6 +13,7 @@ public class MainMenu: IMenu
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _context;
     private readonly NetworkService _networkService;
+    private readonly WalletService _walletService;
 
     private readonly IMenu _blockchainMenu;
     private readonly IMenu _explorerMenu;
@@ -22,6 +23,7 @@ public class MainMenu: IMenu
         BlockchainService blockchainService,
         DisplayService displayService,
         NetworkService networkService,
+        WalletService walletService,
         ConsoleRenderer renderer,
         MenuContext context,
         BlockchainMenu blockchainMenu,
@@ -30,6 +32,7 @@ public class MainMenu: IMenu
     {
         _blockchainService = blockchainService;
         _displayService = displayService;
+        _walletService = walletService;
         _renderer = renderer;
         _context = context;
 
@@ -44,22 +47,27 @@ public class MainMenu: IMenu
             switch (type)
             {
                 case "Transaction":
-                    var transaction = JsonSerializer.Deserialize<Transaction>(message);
-                    if (transaction != null)
                     {
-                        _context.SetStatus($"Received transaction from {transaction.From} to {transaction.To} for amount {transaction.Amount}.");
-                        _blockchainService.AddTransaction(transaction);
+                        var transaction = JsonSerializer.Deserialize<Transaction>(message);
+                        if (transaction != null)
+                        {
+                            _context.SetStatus($"Received transaction from {transaction.From} to {transaction.To} for amount {transaction.Amount}.");
+                            var addingResult = _blockchainService.AddReceivedTransaction(transaction);
+                            _context.SetStatus(addingResult.Message, addingResult.IsValid);
+                        }
+                        break;
                     }
-                    break;
                 case "Block":
-                    var block = JsonSerializer.Deserialize<Block>(message);
-                    if (block != null)
                     {
-                        _context.SetStatus($"Received block with index {block.Index} and hash {block.Hash}");
-                        var addingResult = _blockchainService.AddReceivedBlock(block);
-                        _context.SetStatus(addingResult.Message, addingResult.IsValid);
+                        var block = JsonSerializer.Deserialize<Block>(message);
+                        if (block != null)
+                        {
+                            _context.SetStatus($"Received block with index {block.Index} and hash {block.Hash}");
+                            var addingResult = _blockchainService.AddReceivedBlock(block);
+                            _context.SetStatus(addingResult.Message, addingResult.IsValid);
+                        }
+                        break;
                     }
-                    break;
                 default:
                     _context.SetStatus($"Received data of unsupported type.");
                     break;
@@ -67,8 +75,24 @@ public class MainMenu: IMenu
         });
     }
 
-    public void Run()
+    public async Task Run()
     {
+        var blockchainState = await _blockchainService.LoadAsync();
+        var restorationResult = _blockchainService.RestoreState(blockchainState);
+        if (!restorationResult.IsValid)
+        {
+            _context.SetStatus(restorationResult.Message, restorationResult.IsValid);
+            return;
+        }
+
+        var walletsState = await _walletService.LoadAsync();
+        restorationResult = _walletService.RestoreState(walletsState);
+        if (!restorationResult.IsValid)
+        {
+            _context.SetStatus(restorationResult.Message, restorationResult.IsValid);
+            return;
+        }
+
         while (true)
         {
             Console.Clear();
@@ -81,18 +105,22 @@ public class MainMenu: IMenu
             }
 
             if (actionId == 0)
+            {
+                await _blockchainService.SaveAsync();
+                await _walletService.SaveAsync();
                 return;
+            }
 
             switch (actionId)
             {
                 case 1:
-                    _blockchainMenu.Run();
+                    await _blockchainMenu.Run();
                     break;
                 case 2:
-                    _explorerMenu.Run();
+                    await _explorerMenu.Run();
                     break;
                 case 3:
-                    _walletMenu.Run();
+                    await _walletMenu.Run();
                     break;
                 default:
                     _context.SetStatus("Unknown menu option.", false);

@@ -34,7 +34,7 @@ public class BlockchainMenu: IMenu
         _context = context;
     }
 
-    public void Run()
+    public async Task Run()
     {
         while (true)
         {
@@ -47,7 +47,7 @@ public class BlockchainMenu: IMenu
                     ChangeDifficulty();
                     break;
                 case "2":
-                    AddBlock();
+                    await AddBlock();
                     break;
                 case "3":
                     ShowChain();
@@ -82,6 +82,9 @@ public class BlockchainMenu: IMenu
                 case "13":
                     VerifyMerkleProof();
                     break;
+                case "14":
+                    await Save();
+                    break;
                 case "0":
                     return;
                 default:
@@ -89,6 +92,12 @@ public class BlockchainMenu: IMenu
                     break;
             }
         }
+    }
+
+    private async Task Save()
+    {
+        await _blockchainService.SaveAsync();
+        _context.SetStatus("Saved!");
     }
 
     private void VerifyMerkleProof()
@@ -326,7 +335,7 @@ public class BlockchainMenu: IMenu
             _context.SetStatus(ex.Message, false);
         }
     }
-    private void AddBlock()
+    private async Task AddBlock()
     {
         while (true)
         {
@@ -351,10 +360,10 @@ public class BlockchainMenu: IMenu
             switch (Console.ReadLine())
             {
                 case "1":
-                    MineBlock();
+                    await MineBlock();
                     return;
                 case "2":
-                    AddTransaction();
+                    await AddTransaction();
                     break;
                 case "3":
                     RemoveTransaction();
@@ -413,7 +422,7 @@ public class BlockchainMenu: IMenu
             return;
         }
     }
-    private void MineBlock()
+    private async Task MineBlock()
     {
         try
         {
@@ -431,7 +440,7 @@ public class BlockchainMenu: IMenu
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
             var block = _blockchainService.MinePendingTransactions(minerAddress);
-            _networkService.BroadcastAsync("Block", block);
+            await _networkService.BroadcastAsync("Block", block);
 
             _context.SetStatus($"Block #{block.Index} mined successfully.");
         }
@@ -440,7 +449,7 @@ public class BlockchainMenu: IMenu
             _context.SetStatus(ex.Message, false);
         }
     }
-    private void AddTransaction()
+    private async Task AddTransaction()
     {
         Console.Clear();
         _renderer.PrintHeader("ADD TRANSACTION");
@@ -480,7 +489,10 @@ public class BlockchainMenu: IMenu
                 return;
             }
 
-            _blockchainService.AddTransaction(transaction);
+            var newTransaction = _blockchainService.AddTransaction(transaction);
+            await _networkService.BroadcastAsync(
+                type: "Transaction",
+                data: newTransaction);
 
             _context.SetStatus($"Transaction added to pool. Pool: {_blockchainService.MemPool.Count}");
         }
@@ -688,6 +700,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(11, "Validate Mining Rewards");
         _renderer.PrintOption(12, "Display Merkle Tree");
         _renderer.PrintOption(13, "Merkle Proof");
+        _renderer.PrintOption(14, "Save");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

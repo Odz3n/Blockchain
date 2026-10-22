@@ -26,7 +26,7 @@ public class ExplorerMenu: IMenu
         _menuContext = menuContext;
     }
 
-    public void Run()
+    public async Task Run()
     {
         while (true)
         {

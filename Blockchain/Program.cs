@@ -46,10 +46,11 @@ var mainMenu = new MainMenu(
     blockchainService,
     displayService,
     networkService,
+    walletService,
     renderer,
     context,
     blockchainMenu,
     explorerMenu,
     walletMenu);
 
-mainMenu.Run();
+await mainMenu.Run();

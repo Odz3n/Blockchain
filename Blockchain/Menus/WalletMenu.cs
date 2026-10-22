@@ -1,4 +1,5 @@
 ﻿using Blockchain.Menus.Interfaces;
+using Blockchain.Models;
 using Blockchain.Services;
 using Blockchain.UI;
 using System.Security.Cryptography;
@@ -28,7 +29,7 @@ public class WalletMenu : IMenu
         _context = context;
     }
 
-    public void Run()
+    public async Task Run()
     {
         while (true)
         {
@@ -42,6 +43,7 @@ public class WalletMenu : IMenu
             _renderer.PrintOption(1, "Create Wallet");
             _renderer.PrintOption(2, "List Wallets");
             _renderer.PrintOption(3, "Verify transaction signature");
+            _renderer.PrintOption(4, "Import Private Key");
             _renderer.PrintOption(0, "Back");
 
             _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
@@ -57,6 +59,9 @@ public class WalletMenu : IMenu
                 case "3":
                     VerifyTransactionSignature();
                     break;
+                case "4":
+                    ImportPrivateKey();
+                    break;
                 case "0":
                     return;
                 default:
@@ -66,6 +71,38 @@ public class WalletMenu : IMenu
         }
     }
 
+    private void ImportPrivateKey()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("IMPORT PRIVATE KEY FOR AUTOMATED USE");
+
+        _renderer.WriteColored("\n  Wallet Address: ", ConsoleColor.Cyan);
+        string? walletAddress = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(walletAddress))
+        {
+            _context.SetStatus("Wallet Address cannot be null or empty.", false);
+            return;
+        }
+        var wallet = _walletService.GetWallets()
+            .FirstOrDefault(w => w.Address == walletAddress);
+        if (wallet == null)
+        {
+            _context.SetStatus($"Wallet with Address '{walletAddress}' not found.", false);
+            return;
+        }
+
+        _renderer.WriteColored("\n  Private Key (Base64 | Keep your private key strictly confidential!): ", ConsoleColor.Cyan);
+        string? privateKey = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(privateKey))
+        {
+            _context.SetStatus("PrivateKey cannot be null or empty.", false);
+            return;
+        }
+
+        var importResult = _walletService.ImportPrivateKey(wallet, Convert.FromBase64String(privateKey));
+        _context.SetStatus(importResult.Message, importResult.IsValid);
+        return;
+    }
     private void VerifyTransactionSignature()
     {
         Console.Clear();
@@ -134,7 +171,6 @@ public class WalletMenu : IMenu
             _context.SetStatus("Invalid public key or cryptographic parameters.", false);
         }
     }
-
     private void CreateWallet()
     {
         Console.Clear();
@@ -151,14 +187,13 @@ public class WalletMenu : IMenu
         try
         {
             var wallet = _walletService.CreateWallet(name);
-            _context.SetStatus($"Wallet for {wallet.Name} created successfully.");
+            _context.SetStatus($"Wallet for {wallet.Name} created successfully.\n   PK: {Convert.ToBase64String(wallet.PrivateKey)}");
         }
         catch (Exception ex)
         {
             _context.SetStatus(ex.Message, false);
         }
     }
-
     private void ListWallets()
     {
         Console.Clear();
