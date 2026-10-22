@@ -43,17 +43,18 @@ public class ConsoleRenderer
     }
     public void ShowStatusBar()
     {
-        if (string.IsNullOrWhiteSpace(_context.StatusMessage))
+        if (_context.StatusMessages.Count == 0)
             return;
 
         Console.WriteLine();
 
-        WriteColored(
-            _context.StatusSuccess ? "  [+] " : "  [!] ",
-            _context.StatusSuccess ? ConsoleColor.Green : ConsoleColor.Red);
+        foreach (var (message, success) in _context.StatusMessages)
+        {
+            WriteColored(success ? "  [+] " : "  [!] ",
+                success ? ConsoleColor.Green : ConsoleColor.Red);
 
-        Console.WriteLine(_context.StatusMessage);
-        _context.ClearStatus();
+            Console.WriteLine(message);
+        }
     }
     public void WaitForKey()
     {

@@ -294,6 +294,18 @@ public class DisplayService
         Row("Attempts", $"{metrics.Attempts:N0}");
         Row("Elapsed", FormatTime(metrics.ElapsedTime));
         Row("Hash Rate", $"{metrics.HashRate:N0} H/s");
+
+        Line();
+
+        Row("Accepted TXs", $"{metrics.AcceptedTransactions}");
+        Row("Rejected TXs", $"{metrics.RejectedTransactions}");
+        Row("Remaining TXs", $"{metrics.RemainingMempoolTransactions}");
+
+        Line();
+
+        Row("Mining Reward", $"{metrics.MiningReward:N2}");
+        Row("Total Fees", $"{metrics.TotalFees:N2}");
+        Row("Miner Received", $"{metrics.MinerReceived:N2}");
     }
 
     public void DisplayRepairMetrics(ChainRepairMetrics metrics)

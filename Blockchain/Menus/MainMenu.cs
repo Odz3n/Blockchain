@@ -39,57 +39,29 @@ public class MainMenu: IMenu
         _blockchainMenu = blockchainMenu;
         _explorerMenu = explorerMenu;
         _walletMenu = walletMenu;
-
-        _networkService = networkService;
-        _networkService.Start((type, message) =>
-        {
-            _context.SetStatus($"Received message of type {type}.");
-            switch (type)
-            {
-                case "Transaction":
-                    {
-                        var transaction = JsonSerializer.Deserialize<Transaction>(message);
-                        if (transaction != null)
-                        {
-                            _context.SetStatus($"Received transaction from {transaction.From} to {transaction.To} for amount {transaction.Amount}.");
-                            var addingResult = _blockchainService.AddReceivedTransaction(transaction);
-                            _context.SetStatus(addingResult.Message, addingResult.IsValid);
-                        }
-                        break;
-                    }
-                case "Block":
-                    {
-                        var block = JsonSerializer.Deserialize<Block>(message);
-                        if (block != null)
-                        {
-                            _context.SetStatus($"Received block with index {block.Index} and hash {block.Hash}");
-                            var addingResult = _blockchainService.AddReceivedBlock(block);
-                            _context.SetStatus(addingResult.Message, addingResult.IsValid);
-                        }
-                        break;
-                    }
-                default:
-                    _context.SetStatus($"Received data of unsupported type.");
-                    break;
-            }
-        });
     }
 
     public async Task Run()
     {
-        var blockchainState = await _blockchainService.LoadAsync();
-        var restorationResult = _blockchainService.RestoreState(blockchainState);
-        if (!restorationResult.IsValid)
+        Console.WriteLine("Load Blockchain Save ?(y/n)");
+        string answer = Console.ReadLine();
+
+        if (answer == "y" ? true : false)
         {
-            _context.SetStatus(restorationResult.Message, restorationResult.IsValid);
-            return;
+            var blockchainState = await _blockchainService.LoadAsync();
+            var chainRestorationResult = _blockchainService.RestoreState(blockchainState);
+            if (!chainRestorationResult.IsValid)
+            {
+                _context.SetStatus(chainRestorationResult.Message, chainRestorationResult.IsValid);
+                return;
+            }
         }
 
         var walletsState = await _walletService.LoadAsync();
-        restorationResult = _walletService.RestoreState(walletsState);
-        if (!restorationResult.IsValid)
+        var walletRestorationResult = _walletService.RestoreState(walletsState);
+        if (!walletRestorationResult.IsValid)
         {
-            _context.SetStatus(restorationResult.Message, restorationResult.IsValid);
+            _context.SetStatus(walletRestorationResult.Message, walletRestorationResult.IsValid);
             return;
         }
 
@@ -138,7 +110,6 @@ public class MainMenu: IMenu
         _renderer.PrintInfo("Difficulty", _blockchainService.Difficulty.ToString());
         _renderer.PrintInfo("Blocks", _blockchainService.Chain.Count.ToString());
         _renderer.PrintInfo("Metrics", _context.ShowMetrics ? "ON" : "OFF");
-        _renderer.PrintInfo("Port", _networkService.Port.ToString());
 
         if (_context.ShowMetrics)
         {

@@ -4,8 +4,10 @@ namespace Blockchain.Menus;
 
 public class MenuContext
 {
-    public string? StatusMessage { get; private set; }
-    public bool StatusSuccess { get; private set; } = true;
+    private const int MaxStatusMessages = 5;
+    private readonly Queue<(string Message, bool Success)> _statusMessages = new();
+    public IReadOnlyCollection<(string Message, bool Success)> StatusMessages
+        => _statusMessages.ToArray();
 
     public bool ShowMetrics { get; private set; }
 
@@ -19,13 +21,14 @@ public class MenuContext
     }
     public void SetStatus(string message, bool success = true)
     {
-        StatusMessage = message;
-        StatusSuccess = success;
+        if (_statusMessages.Count >= MaxStatusMessages)
+            _statusMessages.Dequeue();
+
+        _statusMessages.Enqueue((message, success));
     }
     public void ClearStatus()
     {
-        StatusMessage = null;
-        StatusSuccess = true;
+        _statusMessages.Clear();
     }
     public void ToggleMetrics()
     {

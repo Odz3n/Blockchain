@@ -45,7 +45,8 @@ public class TransactionService
     }
     public ValidationResult ValidateTransaction(
         Transaction transaction,
-        bool includeSignatureValidation = true)
+        bool includeSignatureValidation = true,
+        bool includeExpiryCheck = false)
     {
         if (transaction == null)
             return new ValidationResult 
@@ -115,21 +116,35 @@ public class TransactionService
             }
         }
 
+        if (includeExpiryCheck && IsExpired(transaction))
+        {
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = $"Expired. Transaction {transaction.Id} waited for too long."
+            };
+        }
+
         return new ValidationResult
         {
             IsValid = true,
             Message = "Transaction is valid."
         };
     }
+    public bool IsExpired(Transaction transaction)
+    {
+        return DateTime.UtcNow - transaction.Timestamp > TimeSpan.FromMinutes(5);
+    }
     public ValidationResult ValidateTransactionWithBalance(
         Transaction transaction,
         List<Block> chain,
-        List<Transaction> transactionPool)
+        List<Transaction> transactionPool,
+        bool includeExpiryCheck = false)
     {
         if (transactionPool.Contains(transaction))
             transactionPool.Remove(transaction);
 
-        var validationResult = ValidateTransaction(transaction);
+        var validationResult = ValidateTransaction(transaction, includeExpiryCheck: includeExpiryCheck);
         if (!validationResult.IsValid)
             return new ValidationResult
             {

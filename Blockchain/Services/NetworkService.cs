@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using Blockchain.Models;
+using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -6,18 +7,18 @@ namespace Blockchain.Services;
 
 public class NetworkService
 {
-    private List<int> _peers;
     public int Port { get; private set; }
+    private List<Node> _nodes;
     public NetworkService(
         int port,
-        List<int> peers)
+        List<Node> peers)
     {
         Port = port;
-        _peers = new List<int>(peers);
+        _nodes = new List<Node>(peers);
     }
-    public void Start(Action<string, string> onMessage)
+    public void Start(Func<string, string, Task> onMessage)
     {
-        var listener = new TcpListener(IPAddress.Loopback, Port);
+        var listener = new TcpListener(IPAddress.Any, Port);
         listener.Start();
 
         _ = Task.Run(async () =>
@@ -34,7 +35,7 @@ public class NetworkService
                     {
                         var parts = message.Split('|');
                         if (parts.Length == 2)
-                            onMessage(parts[0], parts[1]);
+                            await onMessage(parts[0], parts[1]);
                     }
                 }
                 catch (Exception ex)
@@ -47,12 +48,12 @@ public class NetworkService
     public async Task BroadcastAsync<T>(string type, T data)
     {
         var json = JsonSerializer.Serialize(data);
-        foreach (var peerPort in _peers)
+        foreach (var node in _nodes)
         {
             try
             {
                 using var client = new TcpClient();
-                await client.ConnectAsync("127.0.0.1", peerPort);
+                await client.ConnectAsync(node.IP, node.Port);
                 using var writer = new StreamWriter(client.GetStream())
                 {
                     AutoFlush = true
@@ -61,7 +62,7 @@ public class NetworkService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to send message to peer {peerPort}: {ex.Message}");
+                Console.WriteLine($"Failed to send message to peer {node.IP}:{node.Port}: {ex.Message}");
             }
         }
     }

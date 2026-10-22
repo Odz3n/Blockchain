@@ -1,4 +1,5 @@
-﻿using Blockchain.Models;
+﻿using Blockchain.Menus;
+using Blockchain.Models;
 using Blockchain.Models.Metrics;
 using Blockchain.Models.Validation;
 using System.Diagnostics;
@@ -13,8 +14,11 @@ public class BlockchainService
     private readonly TransactionService _transactionService;
     private readonly BalanceService _balanceService;
     private readonly StorageService _storageService;
+    private readonly NetworkService _networkService;
+    private readonly MenuContext _menuContext;
     public List<Block> Chain { get; set; } = new();
     public List<Transaction> MemPool { get; set; } = new();
+    private readonly int _maxMemPoolCount = 20;
 
     public int Difficulty { get; set; } = 4;
 
@@ -23,12 +27,14 @@ public class BlockchainService
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
-    private int _maxTransactionsPerBlock = 3;
+    private int _maxTransactionsPerBlock = 5;
     public decimal InitialMiningReward { get; private set; } = 64m;
     private int _halvingInterval = 4;
     private int _minimumReward = 2;
 
     public BlockchainService(
+        NetworkService networkService,
+        MenuContext menuContext,
         int difficulty = 1,
         double targetBlockTime = 2,
         int adjustmentInterval = 2)
@@ -44,11 +50,95 @@ public class BlockchainService
 
         Difficulty = difficulty;
 
+        _menuContext = menuContext;
+        _networkService = networkService;
+        _networkService.Start(async (type, message) =>
+        {
+            _menuContext.SetStatus($"Received message of type {type}.");
+            switch (type)
+            {
+                case "Transaction":
+                    {
+                        var transaction = JsonSerializer.Deserialize<Transaction>(message);
+                        if (transaction != null)
+                        {
+                            _menuContext.SetStatus($"Received transaction from {transaction.From} to {transaction.To} for amount {transaction.Amount}.");
+                            var addingResult = AddReceivedTransaction(transaction);
+                            _menuContext.SetStatus(addingResult.Message, addingResult.IsValid);
+                        }
+                        break;
+                    }
+                case "Block":
+                    {
+                        var block = JsonSerializer.Deserialize<Block>(message);
+                        if (block != null)
+                        {
+                            _menuContext.SetStatus($"Received block with index {block.Index} and hash {block.Hash}");
+                            var addingResult = AddReceivedBlock(block);
+                            _menuContext.SetStatus(addingResult.Message, addingResult.IsValid);
+                        }
+                        break;
+                    }
+                case "GET_CHAIN":
+                    {
+                        _menuContext.SetStatus($"Received GET_CHAIN message.");
+                        await _networkService.BroadcastAsync(type: "CHAIN", new BlockchainState
+                        {
+                            Chain = Chain,
+                            MemPool = MemPool,
+                            Difficulty = Difficulty
+                        });
+                    }
+                    break;
+                case "CHAIN":
+                    {
+                        var state = JsonSerializer.Deserialize<BlockchainState>(message);
+                        var result = TryReplaceChain(state);
+                        if (!result.IsValid)
+                        {
+                            _menuContext.SetStatus($"Failed replacing chain: {result.Message}", result.IsValid);
+                            return;
+                        }
+                        _menuContext.SetStatus("Chain replaced successfully.", result.IsValid);
+                        return;
+                    }
+                default:
+                    _menuContext.SetStatus($"Received data of unsupported type.");
+                    break;
+            }
+        });
+
         AddGenesisBlock();
     }
-    public Block MinePendingTransactions(string minerAddress)
+    public (Block, MiningMetrics) MinePendingTransactions(string minerAddress)
     {
+        int expiredCount = RemoveExpiredTransactions();
+
         var transactions = SelectTransactionsForBlock(_maxTransactionsPerBlock);
+
+        var validTransactions = new List<Transaction>();
+        var rejectedTransactions = new List<Transaction>();
+        foreach (var transaction in transactions)
+        {
+            var validationResult = _transactionService.ValidateTransactionWithBalance(
+                transaction,
+                Chain,
+                validTransactions,
+                includeExpiryCheck: true);
+
+            if (validationResult.IsValid)
+                validTransactions.Add(transaction);
+            else
+            {
+                _menuContext.SetStatus(validationResult.Message, validationResult.IsValid);
+                rejectedTransactions.Add(transaction);
+            }
+        }
+
+        MemPool.RemoveAll(t => rejectedTransactions.Any(r => r.Id == t.Id));
+
+        transactions = validTransactions;
+
         var totalFee = transactions.Sum(t => t.Fee);
 
         Block lastBlock = Chain[Chain.Count - 1];
@@ -56,43 +146,72 @@ public class BlockchainService
         var newBlock = new Block
         {
             Index = lastBlock.Index + 1,
-            Transactions = transactions,
+            Transactions = new List<Transaction>(transactions),
             Author = minerAddress,
             PrevHash = lastBlock.Hash,
             Difficulty = Difficulty
         };
 
         // Current mining reward + sum of transactions' fee
-        var expectedReward = GetMinerReward(newBlock.Index) + transactions
-            .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase)
-            .Sum(t => t.Fee);
+        var miningReward = GetMinerReward(newBlock.Index);
+        var expectedReward = miningReward + totalFee;
 
         var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, expectedReward);
         newBlock.Transactions.Insert(0, coinbase);
         newBlock.MerkleRoot = _hashService.ComputeMerkleRoot(newBlock.Transactions);
 
-        _miningService.MineBlock(newBlock, Difficulty);
+        var miningMetrics = _miningService.MineBlock(newBlock, Difficulty);
 
         Chain.Add(newBlock);
 
-        foreach (var trans in transactions)
-            MemPool.Remove(trans);
+        MemPool.RemoveAll(t => transactions.Any(v => v.Id == t.Id));
+
+        miningMetrics.AcceptedTransactions = transactions.Count;
+        miningMetrics.RejectedTransactions = rejectedTransactions.Count + expiredCount;
+        miningMetrics.TotalFees = totalFee;
+        miningMetrics.MiningReward = miningReward;
+        miningMetrics.RemainingMempoolTransactions = MemPool.Count;
 
         if (newBlock.Index % _adjustmentInterval == 0)
             AdjustDifficulty();
 
-        return newBlock;
+        return (newBlock, miningMetrics);
+    }
+    private int RemoveExpiredTransactions()
+    {
+        var expiredTransactions = MemPool
+            .Where(_transactionService.IsExpired)
+            .ToList();
+
+        foreach (var transaction in expiredTransactions)
+        {
+            MemPool.Remove(transaction);
+            _menuContext.SetStatus($"Expired: {transaction.Id}", false);
+        }
+
+        return expiredTransactions.Count;
     }
     public Transaction AddTransaction(
         Transaction transaction,
         bool includeValidation = true)
     {
+        if (MemPool.Count >= _maxMemPoolCount)
+            throw new ArgumentException($"Mempool full. ({MemPool.Count}/{_maxMemPoolCount})");
+
+        if (MemPool.Any(t => t.Id == transaction.Id))
+            throw new ArgumentException($"Duplicate: Transaction {transaction.Id} is already in the pool.");
+
         if (includeValidation)
         {
-            var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool);
+            var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool, includeExpiryCheck: true);
             if (!validationResult.IsValid)
                 throw new ArgumentException($"Invalid transaction: {validationResult.Message}");
         }
+
+        if (Chain.Any(b => b.Transactions.Any(t => t.Id == transaction.Id)))
+            throw new ArgumentException(
+                $"Duplicate: Transaction {transaction.Id} is already confirmed.");
+
 
         MemPool.Add(transaction);
 
@@ -190,12 +309,41 @@ public class BlockchainService
         //metrics.NewDifficulty = Difficulty;
         //return metrics;
     }
-    public ValidationResult Validate()
+    public ValidationResult Validate(List<Block> chain)
     {
-        for (int i = 1; i < Chain.Count; i++)
+        if (chain[0].Hash != Chain[0].Hash)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Received chain has invalid Genesis Block's Hash."
+            };
+        var transactionIds = new HashSet<string>();
+        foreach (var transaction in chain.SelectMany(b => b.Transactions))
         {
-            var currentBlock = Chain[i];
-            var prevBlock = Chain[i - 1];
+            if (!transactionIds.Add(transaction.Id))
+                return new ValidationResult
+                {
+                    IsValid = false,
+                    Message = $"Duplicate transaction ID: {transaction.Id}."
+                };
+        }
+
+        var historicalDifficulty = chain
+            .Take(Chain.Count)
+            .Sum(b => b.Difficulty);
+        var localDifficulty = Chain.Sum(b => b.Difficulty);
+
+        if (historicalDifficulty != localDifficulty)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Historical difficulty mismatch."
+            };
+
+        for (int i = 1; i < chain.Count; i++)
+        {
+            var currentBlock = chain[i];
+            var prevBlock = chain[i - 1];
 
             string currentHash = _hashService.ComputeHash(currentBlock);
 
@@ -240,11 +388,12 @@ public class BlockchainService
     }
     public ValidationResult ValidateEconomy(
         bool includeIntegrityValidation = true,
-        bool includeSignatureValidation = true)
+        bool includeSignatureValidation = true,
+        bool includeExpiryCheck = false)
     {
         if (includeIntegrityValidation)
         {
-            var integrityResult = Validate();
+            var integrityResult = Validate(Chain);
             if (!integrityResult.IsValid)
                 return integrityResult;
         }
@@ -265,7 +414,7 @@ public class BlockchainService
                 continue;
             }
 
-            var regularResult = ValidateRegularTransactions(block, balances, includeSignatureValidation);
+            var regularResult = ValidateRegularTransactions(block, balances, includeSignatureValidation, includeExpiryCheck);
             if (!regularResult.IsValid)
                 return regularResult;
 
@@ -289,13 +438,14 @@ public class BlockchainService
     private ValidationResult ValidateRegularTransactions(
         Block block,
         Dictionary<string, decimal> balances,
-        bool includeSignatureValidation = true)
+        bool includeSignatureValidation = true,
+        bool includeExpiryCheck = false)
     {
         foreach (var transaction in block.Transactions
             .Where(t => !t.IsCoinbase && t.Type != Models.Type.Coinbase))
         {
             // Check transaction
-            var transactionResult = _transactionService.ValidateTransaction(transaction, includeSignatureValidation);
+            var transactionResult = _transactionService.ValidateTransaction(transaction, includeSignatureValidation, includeExpiryCheck: includeExpiryCheck);
             if (!transactionResult.IsValid)
                 return new ValidationResult
                 {
@@ -471,20 +621,22 @@ public class BlockchainService
             Message = $"Block #{block.Index} added successfully."
         };
     }
-    public ValidationResult AddReceivedTransaction(
-        Transaction transaction)
+    public ValidationResult AddReceivedTransaction(Transaction transaction)
     {
         // Skip if already added
         if (MemPool.Any(t => t.Id == transaction.Id))
             return new ValidationResult
             {
                 IsValid = true,
-                Message = "Transaction already exists in the pool."
+                Message = $"Duplicate: Transaction {transaction.Id} is already in the pool."
             };
+        if (Chain.Any(b => b.Transactions.Any(t => t.Id == transaction.Id)))
+            throw new ArgumentException(
+                $"Duplicate: Transaction {transaction.Id} is already confirmed.");
 
         // Validation
         var transactions = new List<Transaction>(MemPool);
-        var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, transactions);
+        var validationResult = _transactionService.ValidateTransactionWithBalance(transaction, Chain, transactions, includeExpiryCheck: true);
         if (!validationResult.IsValid)
             return new ValidationResult
             {
@@ -518,6 +670,67 @@ public class BlockchainService
         {
             IsValid = true,
             Message = "Blockchain state restored successfully."
+        };
+    }
+    public ValidationResult TryReplaceChain(BlockchainState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.Chain.Count <= Chain.Count)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Received chain is not longer than the local chain."
+            };
+        if (state.Chain[Chain.Count - 1].Hash != Chain[^1].Hash)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Received chain does not extend the local blockchain."
+            };
+
+        var validationResult = Validate(state.Chain);
+        if (!validationResult.IsValid)
+        {
+            _menuContext.SetStatus(validationResult.Message, validationResult.IsValid);
+            return validationResult;
+        }
+
+        var confirmedTransactionIds = state.Chain
+            .SelectMany(b => b.Transactions)
+            .Select(t => t.Id)
+            .ToHashSet();
+
+        var pendingTransactions = MemPool
+            .Concat(state.MemPool)
+            .Where(t => !confirmedTransactionIds.Contains(t.Id))
+            .GroupBy(t => t.Id)
+            .Select(g => g.First())
+            .OrderByDescending(t => t.Fee)
+            .ThenBy(t => t.Timestamp)
+            .ToList();
+
+        var validTransactions = new List<Transaction>();
+        foreach (var transaction in pendingTransactions)
+        {
+            var result = _transactionService.ValidateTransactionWithBalance(
+                transaction,
+                state.Chain,
+                validTransactions,
+                includeExpiryCheck: true);
+
+            if (result.IsValid)
+                validTransactions.Add(transaction);
+        }
+
+        Chain = state.Chain;
+        Difficulty = state.Difficulty;
+        MemPool = validTransactions;
+
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Chain replaced successfully. Mempool merged and revalidated."
         };
     }
     public ChainMetrics GetChainMetrics()

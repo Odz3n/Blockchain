@@ -85,6 +85,9 @@ public class BlockchainMenu: IMenu
                 case "14":
                     await Save();
                     break;
+                case "15":
+                    await Sync();
+                    break;
                 case "0":
                     return;
                 default:
@@ -92,6 +95,11 @@ public class BlockchainMenu: IMenu
                     break;
             }
         }
+    }
+
+    private async Task Sync()
+    {
+        await _networkService.BroadcastAsync(type: "GET_CHAIN", "");
     }
 
     private async Task Save()
@@ -439,8 +447,10 @@ public class BlockchainMenu: IMenu
 
             _renderer.PrintStatus("Mining block...", ConsoleColor.Yellow);
 
-            var block = _blockchainService.MinePendingTransactions(minerAddress);
+            var (block, metrics) = _blockchainService.MinePendingTransactions(minerAddress);
+            _context.LastMiningMetrics = metrics;
             await _networkService.BroadcastAsync("Block", block);
+
 
             _context.SetStatus($"Block #{block.Index} mined successfully.");
         }
@@ -524,7 +534,7 @@ public class BlockchainMenu: IMenu
 
         try
         {
-            var validationResult = _blockchainService.Validate();
+            var validationResult = _blockchainService.Validate(_blockchainService.Chain);
             _context.SetStatus(validationResult.Message, validationResult.IsValid);
         }
         catch (Exception ex)
@@ -579,7 +589,7 @@ public class BlockchainMenu: IMenu
             _context.LastRepairMetrics = _blockchainService.RepairChain(startIndex);
             _context.LastMiningMetrics = null;
 
-            var result = _blockchainService.Validate();
+            var result = _blockchainService.Validate(_blockchainService.Chain);
 
             _context.SetStatus(result.IsValid
                     ? "Chain repaired successfully."
@@ -701,6 +711,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(12, "Display Merkle Tree");
         _renderer.PrintOption(13, "Merkle Proof");
         _renderer.PrintOption(14, "Save");
+        _renderer.PrintOption(15, "Sync");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);
