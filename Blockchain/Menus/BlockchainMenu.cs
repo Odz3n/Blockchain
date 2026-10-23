@@ -15,6 +15,7 @@ public class BlockchainMenu: IMenu
     private readonly NetworkService _networkService;
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _context;
+    private readonly NodeService _nodeService;
 
     public BlockchainMenu(
         BlockchainService blockchainService,
@@ -32,6 +33,8 @@ public class BlockchainMenu: IMenu
         _networkService = networkService;
         _renderer = renderer;
         _context = context;
+
+        _nodeService = new(blockchainService, networkService);
     }
 
     public async Task Run()
@@ -88,12 +91,70 @@ public class BlockchainMenu: IMenu
                 case "15":
                     await Sync();
                     break;
+                case "16":
+                    await GetNodeStats();
+                    break;
                 case "0":
                     return;
                 default:
                     _context.SetStatus("Invalid menu option.", false);
                     break;
             }
+        }
+    }
+
+    private async Task GetNodeStats()
+    {
+        Console.Clear();
+        _renderer.PrintHeader("NODE STATS");
+
+        _renderer.PrintInfo("0. Local Node", $"127.0.0.1:{_networkService.Port}");
+
+        var nodes = _networkService.Nodes
+            .Where(n => !(n.IP == "127.0.0.1" && n.Port == _networkService.Port))
+            .ToList();
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+
+            _renderer.PrintInfo($"{i + 1}. Node", $"{node.IP}:{node.Port}");
+        }
+
+        _renderer.WriteColored("\n  Select Node (0 for local): ", ConsoleColor.Cyan);
+
+        if (!int.TryParse(Console.ReadLine(), out int selection) || selection < 0 || selection > nodes.Count)
+        {
+            _context.SetStatus("Invalid node selection.", false);
+            return;
+        }
+
+        if (selection == 0)
+        {
+            _displayService.DisplayNodeStatistics(_nodeService.GetNodeStatistics());
+            Console.ReadKey(true);
+            return;
+        }
+
+        var selectedNode = nodes[selection - 1];
+
+        try
+        {
+            await _networkService.SendAsync(
+                ip: selectedNode.IP,
+                port: selectedNode.Port,
+                type: "GET_NODE_STATS",
+                data: new NodeStatsRequest
+                {
+                    IP = "127.0.0.1",
+                    Port = _networkService.Port
+                });
+
+            _context.SetStatus($"Node statistics requested from {selectedNode.IP}:{selectedNode.Port}.");
+        }
+        catch (Exception ex)
+        {
+            _context.SetStatus($"Failed to request node statistics: {ex.Message}", false);
         }
     }
 
@@ -712,6 +773,7 @@ public class BlockchainMenu: IMenu
         _renderer.PrintOption(13, "Merkle Proof");
         _renderer.PrintOption(14, "Save");
         _renderer.PrintOption(15, "Sync");
+        _renderer.PrintOption(16, "Get Node Stats");
         _renderer.PrintOption(0, "Back");
 
         _renderer.WriteColored("\n  >>> ", ConsoleColor.Cyan);

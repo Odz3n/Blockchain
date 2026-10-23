@@ -1,4 +1,5 @@
 ﻿using Blockchain.Models;
+using Blockchain.Models.Metrics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -8,13 +9,13 @@ namespace Blockchain.Services;
 public class NetworkService
 {
     public int Port { get; private set; }
-    private List<Node> _nodes;
+    public List<Node> Nodes { get; private set; }
     public NetworkService(
         int port,
         List<Node> peers)
     {
         Port = port;
-        _nodes = new List<Node>(peers);
+        Nodes = new List<Node>(peers);
     }
     public void Start(Func<string, string, Task> onMessage)
     {
@@ -48,7 +49,7 @@ public class NetworkService
     public async Task BroadcastAsync<T>(string type, T data)
     {
         var json = JsonSerializer.Serialize(data);
-        foreach (var node in _nodes)
+        foreach (var node in Nodes)
         {
             try
             {
@@ -65,5 +66,26 @@ public class NetworkService
                 Console.WriteLine($"Failed to send message to peer {node.IP}:{node.Port}: {ex.Message}");
             }
         }
+    }
+    public async Task SendAsync<T>(string ip, int port, string type, T data)
+    {
+        using var client = new TcpClient();
+
+        await client.ConnectAsync(ip, port);
+
+        using var writer = new StreamWriter(
+            client.GetStream(),
+            leaveOpen: true)
+        {
+            AutoFlush = true
+        };
+
+        string json = JsonSerializer.Serialize(data);
+
+        await writer.WriteLineAsync($"{type}|{json}");
+    }
+    public int GetConnectedPeersCount()
+    {
+        return Nodes.Count();
     }
 }

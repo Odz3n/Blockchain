@@ -1,5 +1,10 @@
 ﻿namespace Blockchain.Models;
 
+public class NodeStatsRequest
+{
+    public string IP { get; set; }
+    public int Port { get; set; }
+}
 public class Node
 {
     public string IP { get; set; }

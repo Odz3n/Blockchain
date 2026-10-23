@@ -8,6 +8,8 @@ namespace Blockchain.Services;
 public class WalletService
 {
     private readonly StorageService _storageService;
+    public List<Wallet> Wallets = new();
+    public Wallet? CurrentWallet { get; private set; }
     public WalletService()
     {
         _storageService = new();
@@ -26,6 +28,79 @@ public class WalletService
 
             return wallet;
         }
+    }
+    public ValidationResult ImportWallet(Wallet wallet)
+    {
+        ArgumentNullException.ThrowIfNull(wallet);
+
+        var validationResult = ValidateWallet(wallet);
+        if (!validationResult.IsValid)
+            return validationResult;
+
+        if (Wallets.Any(w => w.Address == wallet.Address))
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet with this address already exists."
+            };
+        if (Wallets.Any(w => w.Name == wallet.Name))
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet with this name already exists."
+            };
+        if (wallet.PrivateKey != null)
+        {
+            var privateKeyResult = ImportPrivateKey(wallet, wallet.PrivateKey);
+            if (!privateKeyResult.IsValid)
+                return privateKeyResult;
+        }
+
+        Wallets.Clear();
+        Wallets.Add(wallet);
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Wallet imported successfully."
+        };
+    }
+    public ValidationResult ValidateWallet(Wallet wallet)
+    {
+        ArgumentNullException.ThrowIfNull(wallet);
+
+        if (string.IsNullOrWhiteSpace(wallet.Name))
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet name cannot be null or empty."
+            };
+        if (string.IsNullOrWhiteSpace(wallet.Address))
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet address cannot be null or empty."
+            };
+        if (wallet.PublicKey == null || wallet.PublicKey.Length == 0)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet public key cannot be null or empty."
+            };
+
+        string expectedAddress = Convert.ToBase64String(
+            SHA256.HashData(wallet.PublicKey)).Substring(0, 10);
+        if (wallet.Address != expectedAddress)
+            return new ValidationResult
+            {
+                IsValid = false,
+                Message = "Wallet address does not match its public key."
+            };
+
+        return new ValidationResult
+        {
+            IsValid = true,
+            Message = "Wallet data is valid."
+        };
     }
     public bool VerifyTransactionSignature(Transaction transaction, byte[] publicKey)
     {
@@ -109,7 +184,6 @@ public class WalletService
         }
     }
 
-    public List<Wallet> Wallets = new();
     public List<Wallet> GetWallets()
     {
         return Wallets.ToList();

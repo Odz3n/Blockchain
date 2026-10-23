@@ -12,7 +12,6 @@ public class MainMenu: IMenu
     private readonly DisplayService _displayService;
     private readonly ConsoleRenderer _renderer;
     private readonly MenuContext _context;
-    private readonly NetworkService _networkService;
     private readonly WalletService _walletService;
 
     private readonly IMenu _blockchainMenu;
@@ -22,7 +21,6 @@ public class MainMenu: IMenu
     public MainMenu(
         BlockchainService blockchainService,
         DisplayService displayService,
-        NetworkService networkService,
         WalletService walletService,
         ConsoleRenderer renderer,
         MenuContext context,

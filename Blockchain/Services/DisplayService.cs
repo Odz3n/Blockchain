@@ -321,6 +321,22 @@ public class DisplayService
         Row("Hash Rate", $"{metrics.AverageHashRate:N0} H/s");
     }
 
+    public void DisplayNodeStatistics(NodeStatistics statistics)
+    {
+        ArgumentNullException.ThrowIfNull(statistics);
+
+        Header("NODE STATISTICS");
+
+        Row("Blocks", statistics.Blocks.ToString("N0"));
+        Row("Transactions in Blockchain", statistics.TransactionsInBlockchain.ToString("N0"));
+        Row("Mempool Count", statistics.MempoolCount.ToString("N0"));
+        Row("Pending Fees", $"{statistics.PendingFees:N4}");
+        Row("Average Mining Time", $"{statistics.AverageMiningTime:F2} s");
+        Row("Current Mining Reward", $"{statistics.CurrentMiningReward:N4}");
+        Row("Next Halving Block", statistics.NextHalvingBlock.ToString("N0"));
+        Row("Peers Count", statistics.PeersCount.ToString("N0"));
+    }
+
     private void Header(string title)
     {
         Colored($"\n  {title}\n", ConsoleColor.Cyan);

@@ -15,6 +15,8 @@ public class BlockchainService
     private readonly BalanceService _balanceService;
     private readonly StorageService _storageService;
     private readonly NetworkService _networkService;
+    private readonly NodeService _nodeService;
+
     private readonly MenuContext _menuContext;
     public List<Block> Chain { get; set; } = new();
     public List<Transaction> MemPool { get; set; } = new();
@@ -44,6 +46,7 @@ public class BlockchainService
         _transactionService = new();
         _balanceService = new();
         _storageService = new();
+        _nodeService = new(this, networkService);
 
         _adjustmentInterval = adjustmentInterval;
         _targetBlockTime = targetBlockTime;
@@ -102,6 +105,53 @@ public class BlockchainService
                         _menuContext.SetStatus("Chain replaced successfully.", result.IsValid);
                         return;
                     }
+                case "GET_NODE_STATS":
+                    {
+                        _menuContext.SetStatus($"Received GET_NODE_STATS message.");
+                        
+                        var request = JsonSerializer.Deserialize<NodeStatsRequest>(message);
+                        if (request == null)
+                        {
+                            _menuContext.SetStatus("Invalid node statistics request.", false);
+                            break;
+                        }
+
+                        var statistics = _nodeService.GetNodeStatistics();
+
+                        await _networkService.SendAsync(
+                            ip: request.IP,
+                            port: request.Port,
+                            type: "NODE_STATS",
+                            data: statistics);
+
+                        _menuContext.SetStatus($"Node statistics sent to {request.IP}:{request.Port}.");
+
+                        break;
+                    }
+                case "NODE_STATS":
+                    {
+                        var statistics = JsonSerializer.Deserialize<NodeStatistics>(message);
+
+                        if (statistics == null)
+                        {
+                            _menuContext.SetStatus("Invalid node statistics response.", false);
+                            break;
+                        }
+
+                        _menuContext.SetStatus(
+                            $"Node Statistics | " +
+                            $"Blocks: {statistics.Blocks:N0} | " +
+                            $"Transactions: {statistics.TransactionsInBlockchain:N0} | " +
+                            $"Mempool: {statistics.MempoolCount:N0} | " +
+                            $"Pending Fees: {statistics.PendingFees:N4} | " +
+                            $"Avg. Mining: {statistics.AverageMiningTime:g} | " +
+                            $"Reward: {statistics.CurrentMiningReward:N4} | " +
+                            $"Next Halving Block #: {statistics.NextHalvingBlock:N0} | " +
+                            $"Peers: {statistics.PeersCount:N0}",
+                            true);
+
+                        break;
+                    }
                 default:
                     _menuContext.SetStatus($"Received data of unsupported type.");
                     break;
@@ -109,6 +159,14 @@ public class BlockchainService
         });
 
         AddGenesisBlock();
+    }
+    public int GetNextHalvingBlock()
+    {
+        var currentIndex = Chain[Chain.Count - 1].Index;
+        var halvings = currentIndex / _halvingInterval;
+        var left = (halvings + 1) * _halvingInterval - currentIndex;
+
+        return currentIndex + left;
     }
     public (Block, MiningMetrics) MinePendingTransactions(string minerAddress)
     {
@@ -825,7 +883,7 @@ public class BlockchainService
 
         Chain.Add(genesis);
     }
-    private decimal GetMinerReward(int blockIndex)
+    public decimal GetMinerReward(int blockIndex)
     {
         if (blockIndex <= 0)
             throw new ArgumentOutOfRangeException(nameof(blockIndex));

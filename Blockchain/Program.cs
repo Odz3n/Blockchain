@@ -49,7 +49,6 @@ var walletMenu = new WalletMenu(
 var mainMenu = new MainMenu(
     blockchainService,
     displayService,
-    networkService,
     walletService,
     renderer,
     context,

@@ -14,6 +14,7 @@ public class MenuContext
     public MiningMetrics? LastMiningMetrics { get; set; }
     public ChainRepairMetrics? LastRepairMetrics { get; set; }
     public DifficultyChangeMetrics? ChangeMetrics { get; set; }
+    public NodeStatistics NodeStatistics { get; set; }
 
     public MenuContext(bool showMetrics = false)
     {
