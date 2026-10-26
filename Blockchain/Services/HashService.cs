@@ -37,7 +37,7 @@ public class HashService
                 if (i + 1 < markleLeaves.Count)
                     newLevel.Add(ComputeSHA256(markleLeaves[i] + markleLeaves[i + 1]));
                 else
-                    newLevel.Add(markleLeaves[i] + markleLeaves[i]);
+                    newLevel.Add(ComputeSHA256(markleLeaves[i] + markleLeaves[i]));
             }
             markleLeaves = newLevel;
         }

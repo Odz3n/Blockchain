@@ -16,6 +16,12 @@
     <Folder Include="Wallets\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="save.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ProjectExtensions><VisualStudio><UserProperties /></VisualStudio></ProjectExtensions>
 
 </Project>

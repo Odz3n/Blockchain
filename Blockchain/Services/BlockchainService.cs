@@ -29,7 +29,7 @@ public class BlockchainService
     private readonly int _minDifficulty = 1;
     private readonly int _maxDifficulty = 6;
 
-    private int _maxTransactionsPerBlock = 5;
+    private int _maxTransactionsPerBlock = 8;
     public decimal InitialMiningReward { get; private set; } = 64m;
     private int _halvingInterval = 4;
     private int _minimumReward = 2;

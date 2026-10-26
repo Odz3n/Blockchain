@@ -129,7 +129,7 @@ public class WalletService
     {
         var walletStates = new List<WalletState>();
 
-        foreach (var userDirectory in Directory.EnumerateDirectories(Path.Combine(Directory.GetCurrentDirectory(), "Wallets")))
+        foreach (var userDirectory in Directory.EnumerateDirectories(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Wallets")))
             walletStates.Add(await _storageService.LoadAsync<WalletState>(Path.Combine(userDirectory, "wallet.json")));
 
         return walletStates;
